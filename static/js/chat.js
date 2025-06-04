@@ -1,5 +1,4 @@
 let socket = null;
-let currentDocumentId = null;
 let currentSessionId = null;
 let isConnected = false;
 let messageQueue = [];
@@ -162,11 +161,6 @@ function setupChatEventListeners() {
         sendBtn.addEventListener('click', sendMessage);
     }
     
-    const documentSelect = document.getElementById('document-select');
-    if (documentSelect) {
-        documentSelect.addEventListener('change', onDocumentChange);
-    }
-    
     window.addEventListener('beforeunload', () => {
         if (socket) {
             socket.close();
@@ -216,18 +210,16 @@ async function loadInitialChatData() {
         showLoading();
         console.log('Loading initial chat data...');
         
-        await loadAvailableDocuments();
+        await loadKnowledgeBaseStatus();
         
         await loadChatSessions();
         
-        const selectedDocId = localStorage.getItem('selected_document_id');
-        if (selectedDocId) {
-            localStorage.removeItem('selected_document_id');
-            const documentSelect = document.getElementById('document-select');
-            if (documentSelect) {
-                documentSelect.value = selectedDocId;
-                onDocumentChange();
-            }
+        const selectedSessionId = localStorage.getItem('selected_session_id');
+        if (selectedSessionId) {
+            localStorage.removeItem('selected_session_id');
+            loadChatSession(selectedSessionId);
+        } else {
+            connectWebSocket();
         }
         
     } catch (error) {
@@ -238,40 +230,42 @@ async function loadInitialChatData() {
     }
 }
 
-async function loadAvailableDocuments() {
+async function loadKnowledgeBaseStatus() {
     try {
-        const documents = await apiCall('/users/documents');
-        console.log('Available documents:', documents);
+        const kbStatus = await apiCall('/users/knowledge-base/status');
+        console.log('Knowledge base status:', kbStatus);
         
-        const documentSelect = document.getElementById('document-select');
-        if (!documentSelect) return;
+        const documentSelector = document.querySelector('.document-selector');
+        if (documentSelector) {
+            documentSelector.style.display = 'none';
+        }
         
-        documentSelect.innerHTML = '<option value="">Choose a document...</option>';
-        
-        const completedDocs = documents.filter(doc => 
-            doc.status === 'completed' && doc.chunks_count > 0
-        );
-        
-        completedDocs.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.document_id;
-            option.textContent = `${doc.original_filename} (${doc.chunks_count} chunks)`;
-            documentSelect.appendChild(option);
-        });
-        
-        if (completedDocs.length === 0) {
-            const option = document.createElement('option');
-            option.value = '';
-            option.textContent = 'No documents available - Contact admin';
-            option.disabled = true;
-            documentSelect.appendChild(option);
+        if (kbStatus.status === 'empty') {
+            updateChatStatus('Knowledge base is empty - Contact admin to add documents');
+            disableChatInput();
             
-            updateChatStatus('No documents available for chat');
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML = `
+                <div class="welcome-message">
+                    <div class="assistant-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <p>Hello! I'm Sage, your Enterprise Support Assistant.</p>
+                        <p><strong>Knowledge Base Status:</strong> Empty</p>
+                        <p>Please contact your administrator to upload documents to the knowledge base before we can start chatting.</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            document.getElementById('chat-title').textContent = `Sage Assistant - Knowledge Base`;
+            updateChatStatus(`Ready to chat - Sage X3 Knowledge Base: ${kbStatus.total_documents} documents, ${kbStatus.total_chunks} knowledge chunks`);
+            enableChatInput();
         }
         
     } catch (error) {
-        console.error('Failed to load documents:', error);
-        showAlert('Failed to load available documents', 'error');
+        console.error('Failed to load knowledge base status:', error);
+        showAlert('Failed to load knowledge base status', 'error');
     }
 }
 
@@ -298,7 +292,7 @@ function renderChatSessions() {
     
     sessionsList.innerHTML = chatSessions.map(session => `
         <div class="session-item ${session.session_id === currentSessionId ? 'active' : ''}" 
-             onclick="loadChatSession('${session.session_id}', '${session.document_id}')">
+             onclick="loadChatSession('${session.session_id}')">
             <div class="session-name">${session.session_name}</div>
             <div class="session-info">
                 ${formatDate(session.updated_at || session.created_at)}
@@ -307,22 +301,16 @@ function renderChatSessions() {
     `).join('');
 }
 
-async function loadChatSession(sessionId, documentId) {
+async function loadChatSession(sessionId) {
     try {
         showLoading();
-        console.log(`Loading chat session: ${sessionId} for document: ${documentId}`);
+        console.log(`Loading chat session: ${sessionId}`);
         
         currentSessionId = sessionId;
-        currentDocumentId = documentId;
-        
-        const documentSelect = document.getElementById('document-select');
-        if (documentSelect) {
-            documentSelect.value = documentId;
-        }
         
         const session = chatSessions.find(s => s.session_id === sessionId);
         if (session) {
-            document.getElementById('chat-title').textContent = session.session_name;
+            document.getElementById('chat-title').textContent = `${session.session_name} - Sage X3 Expert`;
         }
         
         const messages = await apiCall(`/chat/sessions/${sessionId}/messages`);
@@ -357,35 +345,6 @@ async function loadChatSession(sessionId, documentId) {
     }
 }
 
-function onDocumentChange() {
-    const documentSelect = document.getElementById('document-select');
-    const documentId = documentSelect.value;
-    
-    console.log('Document changed to:', documentId);
-    
-    if (!documentId) {
-        disableChatInput();
-        currentDocumentId = null;
-        updateChatStatus('Select a document to start chatting');
-        disconnectWebSocket();
-        return;
-    }
-    
-    currentDocumentId = documentId;
-    currentSessionId = null;
-    
-    const selectedOption = documentSelect.options[documentSelect.selectedIndex];
-    document.getElementById('chat-title').textContent = `Chat: ${selectedOption.textContent}`;
-    updateChatStatus('Connecting...');
-    
-    const chatMessages = document.getElementById('chat-messages');
-    chatMessages.innerHTML = '';
-    
-    addWelcomeMessage();
-    
-    connectWebSocket();
-}
-
 function addWelcomeMessage() {
     const chatMessages = document.getElementById('chat-messages');
     const welcomeDiv = document.createElement('div');
@@ -395,7 +354,16 @@ function addWelcomeMessage() {
             <i class="fas fa-robot"></i>
         </div>
         <div class="message-content">
-            <p>Hello! I'm Sage, your Enterprise Support Assistant. I'm ready to help you with questions about the selected document.</p>
+            <p>Hello! I'm your Sage X3 Expert Assistant. I'm ready to help you with Sage X3 ERP systems.</p>
+            <p><strong>How I can assist you:</strong></p>
+            <ul>
+                <li>🔧 Configuration guidance and system setup</li>
+                <li>🔍 Technical troubleshooting and issue resolution</li>
+                <li>📚 Best practices and recommendations</li>
+                <li>💡 System optimization and performance tips</li>
+                <li>🛡️ Security and permissions guidance</li>
+            </ul>
+            <p><em>Please ask me anything related to Sage X3 systems!</em></p>
         </div>
     `;
     chatMessages.appendChild(welcomeDiv);
@@ -443,14 +411,14 @@ function connectWebSocket() {
         isConnected = false;
         updateConnectionStatus('disconnected');
         
-        if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
+        if (event.code !== 1000 && event.code !== 1001 && reconnectAttempts < maxReconnectAttempts) {
             setTimeout(() => {
                 reconnectAttempts++;
                 console.log(`Reconnection attempt ${reconnectAttempts}`);
-                if (currentDocumentId) {
-                    connectWebSocket();
-                }
+                connectWebSocket();
             }, Math.pow(2, reconnectAttempts) * 1000);
+        } else if (event.code === 1001) {
+            console.log('WebSocket closed normally by user navigation');
         }
     };
     
@@ -471,17 +439,15 @@ function disconnectWebSocket() {
 }
 
 function initializeWebSocketSession() {
-    if (!socket || socket.readyState !== WebSocket.OPEN || !currentDocumentId) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
         console.log('Cannot initialize WebSocket session:', {
             socket: !!socket,
-            readyState: socket?.readyState,
-            documentId: currentDocumentId
+            readyState: socket?.readyState
         });
         return;
     }
     
     const initMessage = {
-        document_id: currentDocumentId,
         session_id: currentSessionId
     };
     
@@ -496,7 +462,7 @@ function handleWebSocketMessage(data) {
         case 'initialized':
             console.log('WebSocket session initialized');
             currentSessionId = data.session_id;
-            updateChatStatus('Ready to chat');
+            updateChatStatus('Ready to chat with knowledge base');
             enableChatInput();
             
             if (!chatSessions.find(s => s.session_id === currentSessionId)) {
@@ -505,7 +471,7 @@ function handleWebSocketMessage(data) {
             break;
             
         case 'searching':
-            updateChatStatus(data.message || 'Searching...');
+            updateChatStatus(data.message || 'Searching knowledge base...');
             break;
             
         case 'streaming':
@@ -514,7 +480,7 @@ function handleWebSocketMessage(data) {
             
         case 'complete':
             completeCurrentMessage(data.answer);
-            updateChatStatus('Ready to chat');
+            updateChatStatus('Ready to chat with knowledge base');
             enableChatInput();
             
             if (data.session_id && data.session_id !== currentSessionId) {
@@ -546,8 +512,8 @@ function sendMessage() {
         return;
     }
     
-    if (!isConnected || !currentDocumentId) {
-        showAlert('Please select a document and ensure connection is established', 'warning');
+    if (!isConnected || !socket || socket.readyState !== WebSocket.OPEN) {
+        showAlert('Connection lost. Please wait for reconnection or refresh the page.', 'warning');
         return;
     }
     
@@ -563,9 +529,16 @@ function sendMessage() {
     
     startAssistantMessage();
     
-    const messageData = { question: message };
-    console.log('Sending message data:', messageData);
-    socket.send(JSON.stringify(messageData));
+    try {
+        const messageData = { question: message };
+        console.log('Sending message data:', messageData);
+        socket.send(JSON.stringify(messageData));
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showAlert('Failed to send message. Please try again.', 'error');
+        enableChatInput();
+        removeCurrentStreamingMessage();
+    }
 }
 
 function handleKeyPress(event) {
@@ -706,7 +679,7 @@ function enableChatInput() {
     
     if (chatInput) {
         chatInput.disabled = false;
-        chatInput.placeholder = "Ask me anything about the document...";
+        chatInput.placeholder = "Ask me anything about Sage X3 systems...";
     }
     if (sendBtn) {
         sendBtn.disabled = !chatInput?.value.trim();
@@ -762,12 +735,7 @@ function scrollToBottom() {
 }
 
 function newChat() {
-    if (!currentDocumentId) {
-        showAlert('Please select a document first', 'warning');
-        return;
-    }
-    
-    console.log('Starting new chat for document:', currentDocumentId);
+    console.log('Starting new chat with knowledge base');
     
     currentSessionId = null;
     
@@ -855,6 +823,10 @@ function createLoadingOverlay() {
 }
 
 const chatStyles = `
+    .document-selector {
+        display: none !important;
+    }
+    
     .alert {
         padding: 1rem 1.5rem;
         border-radius: 8px;
@@ -931,7 +903,7 @@ document.addEventListener('visibilitychange', function() {
         console.log('Page hidden, maintaining WebSocket connection');
     } else {
         console.log('Page visible again');
-        if (!isConnected && currentDocumentId) {
+        if (!isConnected) {
             setTimeout(connectWebSocket, 1000);
         }
     }

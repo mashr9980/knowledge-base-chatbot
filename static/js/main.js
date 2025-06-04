@@ -292,10 +292,10 @@ async function loadDashboardData() {
         }
         
         try {
-            await loadAvailableDocuments();
+            await loadKnowledgeBaseStatus();
         } catch (error) {
-            console.error('Failed to load documents:', error);
-            showEmptyDocumentsState();
+            console.error('Failed to load knowledge base status:', error);
+            showEmptyKnowledgeBaseState();
         }
         
         updateNavigationForUser();
@@ -308,41 +308,41 @@ async function loadDashboardData() {
     }
 }
 
-async function loadAvailableDocuments() {
+async function loadKnowledgeBaseStatus() {
     try {
-        const documents = await apiCall('/users/documents');
-        console.log('Available documents:', documents);
+        const kbStatus = await apiCall('/users/knowledge-base/status');
+        console.log('Knowledge base status:', kbStatus);
         
         const documentsListEl = document.getElementById('documents-list');
         const totalDocumentsEl = document.getElementById('total-documents');
         
         if (totalDocumentsEl) {
-            totalDocumentsEl.textContent = documents ? documents.length : 0;
+            totalDocumentsEl.textContent = kbStatus.total_documents || 0;
         }
         
         if (documentsListEl) {
-            if (!documents || documents.length === 0) {
-                showEmptyDocumentsState();
+            if (kbStatus.status === 'empty' || kbStatus.total_chunks === 0) {
+                showEmptyKnowledgeBaseState();
             } else {
-                renderDocumentsList(documents);
+                renderKnowledgeBaseStatus(kbStatus);
             }
         }
         
     } catch (error) {
-        console.error('Error loading documents:', error);
-        showEmptyDocumentsState();
+        console.error('Error loading knowledge base status:', error);
+        showEmptyKnowledgeBaseState();
         throw error;
     }
 }
 
-function showEmptyDocumentsState() {
+function showEmptyKnowledgeBaseState() {
     const documentsListEl = document.getElementById('documents-list');
     if (documentsListEl) {
         documentsListEl.innerHTML = `
             <div style="text-align: center; padding: 2rem; color: #666;">
-                <i class="fas fa-file-alt" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                <h3>No Documents Available</h3>
-                <p>Contact your administrator to upload documents to the knowledge base.</p>
+                <i class="fas fa-database" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                <h3>Knowledge Base Empty</h3>
+                <p>The knowledge base is currently empty. Contact your administrator to upload documents.</p>
                 <button class="btn btn-primary" onclick="window.location.reload()" style="margin-top: 1rem;">
                     <i class="fas fa-refresh"></i> Refresh
                 </button>
@@ -356,47 +356,50 @@ function showEmptyDocumentsState() {
     }
 }
 
-function renderDocumentsList(documents) {
+function renderKnowledgeBaseStatus(kbStatus) {
     const documentsListEl = document.getElementById('documents-list');
     if (!documentsListEl) return;
     
-    const completedDocs = documents.filter(doc => 
-        doc.status === 'completed' && doc.chunks_count > 0
-    );
-    
-    if (completedDocs.length === 0) {
-        documentsListEl.innerHTML = `
-            <div style="text-align: center; padding: 2rem; color: #666;">
-                <i class="fas fa-clock" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                <h3>Documents Processing</h3>
-                <p>Documents are being processed. Please check back later.</p>
-                <button class="btn btn-primary" onclick="window.location.reload()" style="margin-top: 1rem;">
+    documentsListEl.innerHTML = `
+        <div class="knowledge-base-status">
+            <div class="kb-header">
+                <div class="kb-info">
+                    <h4><i class="fas fa-database"></i> Unified Knowledge Base</h4>
+                    <p>Comprehensive knowledge base with all uploaded documents</p>
+                </div>
+                <div class="kb-stats">
+                    <span class="status-badge status-completed">Ready</span>
+                </div>
+            </div>
+            
+            <div class="kb-details">
+                <div class="kb-stat">
+                    <span class="stat-label">Total Documents:</span>
+                    <span class="stat-value">${kbStatus.total_documents}</span>
+                </div>
+                <div class="kb-stat">
+                    <span class="stat-label">Knowledge Chunks:</span>
+                    <span class="stat-value">${kbStatus.total_chunks}</span>
+                </div>
+                <div class="kb-stat">
+                    <span class="stat-label">Last Updated:</span>
+                    <span class="stat-value">${formatDate(kbStatus.last_updated)}</span>
+                </div>
+            </div>
+            
+            <div class="kb-actions">
+                <button class="btn btn-primary" onclick="startChatWithKnowledgeBase()">
+                    <i class="fas fa-comments"></i> Start Chat
+                </button>
+                <button class="btn btn-outline" onclick="window.location.reload()">
                     <i class="fas fa-refresh"></i> Refresh
                 </button>
             </div>
-        `;
-        return;
-    }
-    
-    documentsListEl.innerHTML = completedDocs.map(doc => `
-        <div class="document-item">
-            <div class="document-info">
-                <h4>${doc.original_filename}</h4>
-                <p>Type: ${doc.file_type.toUpperCase()} • Size: ${formatFileSize(doc.file_size)} • Chunks: ${doc.chunks_count}</p>
-                <small>Uploaded: ${formatDate(doc.created_at)}</small>
-            </div>
-            <div>
-                <span class="status-badge status-completed">Ready</span>
-                <button class="btn btn-primary btn-small" onclick="startChatWithDocument('${doc.document_id}')" style="margin-left: 0.5rem;">
-                    <i class="fas fa-comments"></i> Chat
-                </button>
-            </div>
         </div>
-    `).join('');
+    `;
 }
 
-function startChatWithDocument(documentId) {
-    localStorage.setItem('selected_document_id', documentId);
+function startChatWithKnowledgeBase() {
     showChat();
 }
 
@@ -444,3 +447,84 @@ function setupEventListeners() {
         }
     });
 }
+
+const kbStyles = `
+    .knowledge-base-status {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .kb-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e1e8ed;
+    }
+    
+    .kb-info h4 {
+        color: #333;
+        margin-bottom: 0.25rem;
+    }
+    
+    .kb-info p {
+        color: #666;
+        font-size: 0.9rem;
+        margin: 0;
+    }
+    
+    .kb-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .kb-stat {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem;
+        background: #f8f9fa;
+        border-radius: 5px;
+    }
+    
+    .stat-label {
+        font-weight: 500;
+        color: #555;
+    }
+    
+    .stat-value {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .kb-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+    
+    @media (max-width: 768px) {
+        .kb-header {
+            flex-direction: column;
+            gap: 1rem;
+            align-items: stretch;
+        }
+        
+        .kb-details {
+            grid-template-columns: 1fr;
+        }
+        
+        .kb-actions {
+            flex-direction: column;
+        }
+    }
+`;
+
+const kbStyleSheet = document.createElement('style');
+kbStyleSheet.textContent = kbStyles;
+document.head.appendChild(kbStyleSheet);

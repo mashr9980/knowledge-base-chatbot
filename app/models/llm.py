@@ -40,7 +40,10 @@ class LLMModel:
                     full_response += token
                     
                     if callback:
-                        await callback(token)
+                        should_continue = await callback(token)
+                        if should_continue is False:
+                            # logger.info("Token streaming stopped by callback")
+                            break
             
             return full_response
             

@@ -12,8 +12,8 @@ class ChatService:
         self.db = db
         self.document_store = document_store
     
-    def create_session(self, user_id: int, document_id: str, session_name: str = "New Chat") -> ChatSession:
-        """Create a new chat session"""
+    def create_session(self, user_id: int, document_id: str = "unified_kb", session_name: str = "New Chat") -> ChatSession:
+        """Create a new chat session for unified knowledge base"""
         session_id = str(uuid.uuid4())
         session = ChatSession(
             session_id=session_id,

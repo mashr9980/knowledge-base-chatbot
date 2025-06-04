@@ -76,7 +76,7 @@ async def startup_event():
     signal.signal(signal.SIGINT, signal_handler)
     
     _startup_complete = True
-    logger.info("🎉 Startup complete! System ready for multiple users")
+    logger.info("Startup complete! System ready for multiple users")
 
 @app.on_event("shutdown")
 async def shutdown_event():

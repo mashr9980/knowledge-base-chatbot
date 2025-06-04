@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sage Chat</title>
+                        <title>Sage X3 Expert Chat</title>
     <link rel="stylesheet" href="/static/css/main.css">
     <link rel="stylesheet" href="/static/css/chat.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -11,7 +11,6 @@
 </head>
 <body>
     <div class="chat-container">
-        <!-- Sidebar -->
         <div class="chat-sidebar">
             <div class="sidebar-header">
                 <div class="nav-brand">
@@ -23,11 +22,14 @@
                 </button>
             </div>
 
-            <div class="document-selector">
-                <label for="document-select"><i class="fas fa-file-alt"></i> Select Document:</label>
-                <select id="document-select" onchange="onDocumentChange()">
-                    <option value="">Loading documents...</option>
-                </select>
+            <div class="knowledge-base-info">
+                <div class="kb-info-card">
+                    <i class="fas fa-database"></i>
+                    <div class="kb-info-content">
+                        <h4>Sage X3 Knowledge Base</h4>
+                        <p>Specialized support for Sage X3 ERP systems with expert guidance and documentation</p>
+                    </div>
+                </div>
             </div>
 
             <div class="chat-sessions">
@@ -50,12 +52,11 @@
             </div>
         </div>
 
-        <!-- Chat Area -->
         <div class="chat-main">
             <div class="chat-header">
                 <div class="chat-info">
-                    <h3 id="chat-title">Sage Assistant</h3>
-                    <p id="chat-status">Select a document to start chatting</p>
+                    <h3 id="chat-title">Sage X3 Expert Assistant</h3>
+                    <p id="chat-status">Connecting to knowledge base...</p>
                 </div>
                 <div class="chat-actions">
                     <button class="btn btn-small btn-secondary" onclick="clearChat()" id="clear-btn" disabled>
@@ -70,13 +71,16 @@
                         <i class="fas fa-robot"></i>
                     </div>
                     <div class="message-content">
-                        <p>Hello! I'm Sage, your Enterprise Support Assistant. Please select a document from the sidebar to start our conversation.</p>
-                        <p><strong>Quick Start:</strong></p>
+                        <p>Hello! I'm Sage X3 Expert Assistant, your specialized support for Sage X3 ERP systems. I'm ready to help you with configuration, troubleshooting, and best practices.</p>
+                        <p><strong>How I can assist you:</strong></p>
                         <ul>
-                            <li>📄 Choose a document from the dropdown</li>
-                            <li>💬 Ask questions about the document content</li>
-                            <li>🔍 Get instant AI-powered answers</li>
+                            <li>🔧 Sage X3 configuration guidance and setup</li>
+                            <li>🔍 Technical troubleshooting and issue resolution</li>
+                            <li>📚 Best practices and recommendations</li>
+                            <li>💡 System optimization and performance tips</li>
+                            <li>🛡️ Security and permissions guidance</li>
                         </ul>
+                        <p><em>Please ask me anything related to Sage X3 systems!</em></p>
                     </div>
                 </div>
             </div>
@@ -85,7 +89,7 @@
                 <div class="chat-input-wrapper">
                     <textarea 
                         id="chat-input" 
-                        placeholder="Select a document first..." 
+                        placeholder="Connecting to knowledge base..." 
                         disabled
                         onkeypress="handleKeyPress(event)"
                         rows="1"
@@ -107,13 +111,11 @@
         </div>
     </div>
 
-    <!-- Connection Status -->
     <div id="connection-status" class="connection-status disconnected">
         <i class="fas fa-circle"></i>
         <span>Disconnected</span>
     </div>
 
-    <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay">
         <div class="loading-content">
             <div class="spinner"></div>
@@ -122,17 +124,14 @@
         </div>
     </div>
 
-    <!-- Alert Messages -->
     <div id="alert-container" class="alert-container"></div>
 
-    <!-- Scripts -->
     <script src="/static/js/main.js"></script>
     <script src="/static/js/chat.js"></script>
     
     <script>
         console.log('Sage Chat Interface initialized');
         
-        // Add error handling
         window.addEventListener('error', function(e) {
             console.error('JavaScript Error:', e.error);
             if (typeof showAlert === 'function') {
@@ -140,11 +139,9 @@
             }
         });
         
-        // Debug information
         console.log('Chat Interface URL:', window.location.href);
         console.log('API Base URL:', window.location.origin);
         
-        // Handle textarea auto-resize
         document.addEventListener('DOMContentLoaded', function() {
             const chatInput = document.getElementById('chat-input');
             if (chatInput) {
@@ -155,8 +152,45 @@
             }
         });
         
-        // Add connection status styling
-        const connectionStyles = `
+        const knowledgeBaseStyles = `
+            .knowledge-base-info {
+                padding: 1rem 1.5rem;
+                border-bottom: 2px solid #e1e8ed;
+            }
+            
+            .kb-info-card {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                padding: 1rem;
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+                border-radius: 10px;
+                border: 1px solid rgba(102, 126, 234, 0.2);
+            }
+            
+            .kb-info-card i {
+                font-size: 2rem;
+                color: #667eea;
+                min-width: 2rem;
+            }
+            
+            .kb-info-content h4 {
+                color: #333;
+                margin: 0 0 0.25rem 0;
+                font-size: 1rem;
+            }
+            
+            .kb-info-content p {
+                color: #666;
+                margin: 0;
+                font-size: 0.85rem;
+                line-height: 1.4;
+            }
+            
+            .document-selector {
+                display: none !important;
+            }
+            
             .connection-status {
                 position: fixed;
                 bottom: 20px;
@@ -250,7 +284,7 @@
         `;
         
         const styleSheet = document.createElement('style');
-        styleSheet.textContent = connectionStyles;
+        styleSheet.textContent = knowledgeBaseStyles;
         document.head.appendChild(styleSheet);
     </script>
 </body>

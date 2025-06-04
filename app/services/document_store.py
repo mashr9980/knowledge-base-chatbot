@@ -25,8 +25,8 @@ class DocumentStore:
         logger.info(f"Initializing DocumentStore with base path: {base_path}")
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
-        self.index_path = self.base_path / "faiss_index"
-        self.metadata_path = self.base_path / "metadata.pickle"
+        self.index_path = self.base_path / "unified_faiss_index"
+        self.metadata_path = self.base_path / "unified_metadata.pickle"
         
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.EMBEDDINGS_MODEL,
@@ -36,20 +36,22 @@ class DocumentStore:
         self._initialize_storage()
 
     def _initialize_storage(self):
-        logger.info("Initializing storage")
+        logger.info("Initializing unified knowledge base storage")
         try:
             if self.index_path.exists() and self.metadata_path.exists():
-                logger.info("Loading existing index and metadata")
+                logger.info("Loading existing unified index and metadata")
                 self.index = faiss.read_index(str(self.index_path))
                 with open(self.metadata_path, 'rb') as f:
                     self.metadata = pickle.load(f)
             else:
-                logger.info("Creating new index and metadata")
+                logger.info("Creating new unified index and metadata")
                 embedding_dim = len(self.embeddings.embed_query("test"))
                 self.index = faiss.IndexFlatL2(embedding_dim)
                 self.metadata = {
-                    'documents': {}, 
-                    'id_mapping': {}  
+                    'documents': {},
+                    'chunks': [],
+                    'id_mapping': {},
+                    'global_status': 'ready'
                 }
                 self._save_storage()
         except Exception as e:
@@ -57,7 +59,7 @@ class DocumentStore:
             raise
 
     def _save_storage(self):
-        logger.info("Saving storage")
+        logger.info("Saving unified storage")
         try:
             faiss.write_index(self.index, str(self.index_path))
             with open(self.metadata_path, 'wb') as f:
@@ -67,7 +69,7 @@ class DocumentStore:
             raise
 
     async def add_document(self, document_id: str, filename: str) -> None:
-        logger.info(f"Adding document {document_id} with filename {filename}")
+        logger.info(f"Adding document {document_id} with filename {filename} to unified knowledge base")
         self.metadata['documents'][document_id] = {
             'status': DocumentStatus.PROCESSING,
             'chunks': [],
@@ -84,14 +86,12 @@ class DocumentStore:
                 return loader.load()
             
             elif file_type.lower() == 'docx':
-                # Use python-docx for better handling
                 doc = docx.Document(file_path)
                 content = []
                 for paragraph in doc.paragraphs:
                     if paragraph.text.strip():
                         content.append(paragraph.text)
                 
-                # Create a document object similar to langchain format
                 from langchain_core.documents import Document as LangChainDoc
                 return [LangChainDoc(page_content='\n'.join(content), metadata={'source': file_path})]
             
@@ -100,7 +100,6 @@ class DocumentStore:
                 return loader.load()
             
             elif file_type.lower() in ['xlsx', 'xls']:
-                # Handle Excel files
                 df = pd.read_excel(file_path)
                 content = df.to_string(index=False)
                 
@@ -115,22 +114,18 @@ class DocumentStore:
             raise
 
     async def process_document(self, document_id: str, file_path: str, db: Session) -> bool:
-        logger.info(f"Processing document {document_id}")
+        logger.info(f"Processing document {document_id} for unified knowledge base")
         try:
-            # Update database status
             db_document = db.query(Document).filter(Document.document_id == document_id).first()
             if db_document:
                 db_document.status = DocumentStatus.PROCESSING
                 db.commit()
             
-            # Get file type from database record
             file_type = db_document.file_type if db_document else 'pdf'
             logger.info(f"Processing file as type: {file_type}")
             
-            # Load document based on type
             documents = self._load_document_by_type(file_path, file_type)
             
-            # Split documents into chunks
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=settings.SPLIT_CHUNK_SIZE,
                 chunk_overlap=settings.SPLIT_OVERLAP
@@ -138,41 +133,44 @@ class DocumentStore:
             chunks = text_splitter.split_documents(documents)
             logger.info(f"Split document into {len(chunks)} chunks")
             
-            # Create embeddings for chunks
             chunk_texts = [chunk.page_content for chunk in chunks]
-            logger.info("Creating embeddings")
+            logger.info("Creating embeddings for unified knowledge base")
             embeddings = self.embeddings.embed_documents(chunk_texts)
             
-            # Add to FAISS index
-            logger.info("Adding to FAISS index")
+            logger.info("Adding to unified FAISS index")
             start_idx = self.index.ntotal
             self.index.add(np.array(embeddings))
             
-            # Update metadata
             chunk_metadata = []
             for i, chunk in enumerate(chunks):
                 faiss_id = start_idx + i
-                self.metadata['id_mapping'][faiss_id] = (document_id, i)
-                chunk_metadata.append({
+                chunk_info = {
                     'text': chunk.page_content,
-                    'page': chunk.metadata.get('page', 0)
-                })
+                    'page': chunk.metadata.get('page', 0),
+                    'document_id': document_id,
+                    'filename': db_document.original_filename if db_document else 'unknown',
+                    'chunk_index': i
+                }
+                
+                self.metadata['id_mapping'][faiss_id] = len(self.metadata['chunks'])
+                self.metadata['chunks'].append(chunk_info)
+                chunk_metadata.append(chunk_info)
             
-            logger.info("Updating document status")
+            logger.info("Updating unified knowledge base metadata")
             self.metadata['documents'][document_id].update({
                 'status': DocumentStatus.COMPLETED,
-                'chunks': chunk_metadata
+                'chunks': chunk_metadata,
+                'chunk_count': len(chunks)
             })
             
             self._save_storage()
             
-            # Update database
             if db_document:
                 db_document.status = DocumentStatus.COMPLETED
                 db_document.chunks_count = len(chunks)
                 db.commit()
             
-            logger.info(f"Successfully processed document {document_id}")
+            logger.info(f"Successfully processed document {document_id} into unified knowledge base")
             return True
             
         except Exception as e:
@@ -181,7 +179,6 @@ class DocumentStore:
             self.metadata['documents'][document_id]['error'] = str(e)
             self._save_storage()
             
-            # Update database
             if db_document:
                 db_document.status = DocumentStatus.FAILED
                 db_document.error_message = str(e)
@@ -189,53 +186,76 @@ class DocumentStore:
             
             return False
 
-    async def search(self, document_id: str, query: str, k: int = 4) -> List[str]:
-        """Search for relevant chunks in a specific document"""
-        if document_id not in self.metadata['documents']:
-            raise ValueError(f"Document {document_id} not found")
+    async def search(self, query: str, k: int = 4) -> List[str]:
+        """Search across the entire unified knowledge base"""
+        try:
+            if self.index.ntotal == 0:
+                logger.warning("No documents in unified knowledge base")
+                return []
             
-        if self.metadata['documents'][document_id]['status'] != DocumentStatus.COMPLETED:
-            raise ValueError(f"Document {document_id} is not ready")
+            query_embedding = self.embeddings.embed_query(query)
             
-        # Create query embedding
-        query_embedding = self.embeddings.embed_query(query)
-        
-        # Search in FAISS
-        D, I = self.index.search(np.array([query_embedding]), k * 2)
-        
-        # Filter results for specific document
-        relevant_chunks = []
-        for idx in I[0]:
-            if idx != -1:
-                doc_id, chunk_id = self.metadata['id_mapping'][int(idx)]
-                if doc_id == document_id:
-                    chunk = self.metadata['documents'][doc_id]['chunks'][chunk_id]
-                    relevant_chunks.append(chunk['text'])
-                    if len(relevant_chunks) == k:
-                        break
+            D, I = self.index.search(np.array([query_embedding]), k)
+            
+            relevant_chunks = []
+            for idx in I[0]:
+                if idx != -1 and idx in self.metadata['id_mapping']:
+                    chunk_idx = self.metadata['id_mapping'][int(idx)]
+                    if chunk_idx < len(self.metadata['chunks']):
+                        chunk = self.metadata['chunks'][chunk_idx]
+                        relevant_chunks.append(chunk['text'])
+            
+            logger.info(f"Found {len(relevant_chunks)} relevant chunks from unified knowledge base")
+            return relevant_chunks
                         
-        return relevant_chunks
+        except Exception as e:
+            logger.error(f"Error searching unified knowledge base: {str(e)}")
+            return []
 
     def get_document_status(self, document_id: str) -> Optional[Dict]:
-        """Get document processing status from FAISS metadata"""
+        """Get document processing status from unified knowledge base"""
         return self.metadata['documents'].get(document_id)
 
+    def get_knowledge_base_status(self) -> Dict:
+        """Get overall knowledge base status"""
+        total_documents = len(self.metadata['documents'])
+        completed_documents = len([doc for doc in self.metadata['documents'].values() 
+                                 if doc['status'] == DocumentStatus.COMPLETED])
+        total_chunks = len(self.metadata['chunks'])
+        
+        return {
+            'status': self.metadata['global_status'],
+            'total_documents': total_documents,
+            'completed_documents': completed_documents,
+            'total_chunks': total_chunks,
+            'last_updated': datetime.utcnow().isoformat()
+        }
+
     def delete_document(self, document_id: str) -> bool:
-        """Delete document from FAISS store"""
+        """Delete document from unified knowledge base"""
         try:
             if document_id in self.metadata['documents']:
-                # Remove from metadata
-                del self.metadata['documents'][document_id]
+                logger.info(f"Removing document {document_id} from unified knowledge base")
                 
-                # Remove from id_mapping (this is complex for FAISS, so we'll mark as deleted)
-                # In production, you might want to rebuild the index periodically
+                chunks_to_remove = []
+                for i, chunk in enumerate(self.metadata['chunks']):
+                    if chunk.get('document_id') == document_id:
+                        chunks_to_remove.append(i)
+                
+                for chunk_idx in reversed(chunks_to_remove):
+                    del self.metadata['chunks'][chunk_idx]
+                
                 keys_to_remove = []
-                for faiss_id, (doc_id, chunk_id) in self.metadata['id_mapping'].items():
-                    if doc_id == document_id:
+                for faiss_id, chunk_idx in self.metadata['id_mapping'].items():
+                    if chunk_idx in chunks_to_remove or chunk_idx >= len(self.metadata['chunks']):
                         keys_to_remove.append(faiss_id)
                 
                 for key in keys_to_remove:
                     del self.metadata['id_mapping'][key]
+                
+                del self.metadata['documents'][document_id]
+                
+                logger.warning(f"Document {document_id} removed from metadata. FAISS index rebuild recommended for optimal performance.")
                 
                 self._save_storage()
                 return True
@@ -243,3 +263,28 @@ class DocumentStore:
         except Exception as e:
             logger.error(f"Error deleting document: {str(e)}")
             return False
+
+    def rebuild_index(self):
+        """Rebuild FAISS index from current chunks (optional maintenance operation)"""
+        try:
+            logger.info("Rebuilding unified FAISS index")
+            
+            if not self.metadata['chunks']:
+                logger.info("No chunks to rebuild index from")
+                return
+            
+            chunk_texts = [chunk['text'] for chunk in self.metadata['chunks']]
+            embeddings = self.embeddings.embed_documents(chunk_texts)
+            
+            embedding_dim = len(embeddings[0])
+            self.index = faiss.IndexFlatL2(embedding_dim)
+            self.index.add(np.array(embeddings))
+            
+            self.metadata['id_mapping'] = {i: i for i in range(len(self.metadata['chunks']))}
+            
+            self._save_storage()
+            logger.info("FAISS index rebuilt successfully")
+            
+        except Exception as e:
+            logger.error(f"Error rebuilding index: {str(e)}")
+            raise

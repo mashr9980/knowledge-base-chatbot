@@ -35,11 +35,11 @@ def create_chat_session(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new chat session"""
+    """Create a new chat session for unified knowledge base"""
     chat_service = ChatService(db, document_store)
     session = chat_service.create_session(
         current_user.id, 
-        session_data.document_id, 
+        "unified_kb",
         session_data.session_name
     )
     return ChatSessionSchema.from_orm(session)
@@ -87,6 +87,11 @@ def delete_session(
     db.commit()
     return {"message": "Session deleted successfully"}
 
+@router.get("/knowledge-base/status")
+def get_knowledge_base_status():
+    """Get unified knowledge base status"""
+    return document_store.get_knowledge_base_status()
+
 @router.websocket("/ws/{token}")
 async def websocket_endpoint(websocket: WebSocket, token: str):
     await websocket.accept()
@@ -111,7 +116,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             await websocket.close()
             return
         
-        document_id = None
         session_id = None
         is_initialized = False
         chat_history = []
@@ -150,56 +154,41 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 }))
                 return
             
-            document_id = init_message.get("document_id")
             session_id = init_message.get("session_id")
             
-            if not document_id:
+            logger.info(f"Initializing unified knowledge base chat, session_id: {session_id}")
+            
+            if "unified_kb" not in active_connections:
+                active_connections["unified_kb"] = {}
+            active_connections["unified_kb"][client_id] = websocket
+            
+            kb_status = document_store.get_knowledge_base_status()
+            if kb_status['total_chunks'] == 0:
                 await websocket.send_text(json.dumps({
                     "status": "error",
-                    "error": "Missing document_id in initialization message."
-                }))
-                return
-            
-            logger.info(f"Initializing with document_id: {document_id}, session_id: {session_id}")
-            
-            if document_id not in active_connections:
-                active_connections[document_id] = {}
-            active_connections[document_id][client_id] = websocket
-            
-            faiss_status = document_store.get_document_status(document_id)
-            if not faiss_status:
-                await websocket.send_text(json.dumps({
-                    "status": "error",
-                    "error": "Document not found in vector store."
-                }))
-                return
-            
-            if faiss_status['status'] != "completed":
-                await websocket.send_text(json.dumps({
-                    "status": "error",
-                    "error": f"Document is not ready yet. Current status: {faiss_status['status']}"
+                    "error": "Knowledge base is empty. Please contact admin to upload documents."
                 }))
                 return
             
             if session_id:
                 session = chat_service.get_session_by_id(session_id, user.id)
                 if not session:
-                    session = chat_service.create_session(user.id, document_id)
+                    session = chat_service.create_session(user.id, "unified_kb")
                     session_id = session.session_id
                     logger.info(f"Created new session as provided session_id not found: {session_id}")
             else:
-                session = chat_service.create_session(user.id, document_id)
+                session = chat_service.create_session(user.id, "unified_kb")
                 session_id = session.session_id
                 logger.info(f"Created new session: {session_id}")
             
             await websocket.send_text(json.dumps({
                 "status": "initialized",
-                "document_id": document_id,
                 "session_id": session_id,
-                "message": "Sage Assistant connected successfully. I'm ready to help you with questions about your document."
+                "knowledge_base_status": kb_status,
+                "message": "Sage Assistant connected successfully. I'm ready to help you with questions about our knowledge base."
             }))
             is_initialized = True
-            logger.info("Sage WebSocket initialized successfully")
+            logger.info("Sage WebSocket initialized successfully for unified knowledge base")
             
             while True:
                 try:
@@ -208,10 +197,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                     logger.info(f"Received data: {data}")
                     
                     if not data or data.strip() == "":
-                        await websocket.send_text(json.dumps({
-                            "status": "error", 
-                            "error": "Empty message received"
-                        }))
+                        if websocket.client_state.name == 'CONNECTED':
+                            await websocket.send_text(json.dumps({
+                                "status": "error", 
+                                "error": "Empty message received"
+                            }))
                         continue
                     
                     try:
@@ -221,17 +211,17 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         question = data.strip()
                     
                     if not question or not isinstance(question, str) or question.strip() == "":
-                        await websocket.send_text(json.dumps({
-                            "status": "error",
-                            "error": "Invalid or empty question."
-                        }))
+                        if websocket.client_state.name == 'CONNECTED':
+                            await websocket.send_text(json.dumps({
+                                "status": "error",
+                                "error": "Invalid or empty question."
+                            }))
                         continue
                     
                     logger.info(f"Processing question: {question}")
                     
                     with Timer() as timer:
                         context_chunks = await document_store.search(
-                            document_id,
                             question,
                             k=settings.SIMILAR_DOCS_COUNT
                         )
@@ -240,58 +230,84 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         for entry in chat_history:
                             formatted_chat_history += f"User: {entry['question']}\nSage: {entry['answer']}\n\n"
                         
-                        context_text = "\n\n".join(context_chunks) if context_chunks else "(No relevant content found in the document for your question)"
+                        context_text = "\n\n".join(context_chunks) if context_chunks else "(No relevant content found in the knowledge base for your question)"
                         
                         system_prompt = (
-                            "You are Sage Assistant - a helpful AI assistant designed to help users understand and navigate documents.\n\n"
+                            "You are a Sage X3 system expert with deep technical and functional knowledge. You can analyze complex "
+                            "Sage X3 scenarios, provide configuration guidance, troubleshoot issues, and offer best-practice recommendations.\n\n"
                             
-                            "Your role and responsibilities:\n"
-                            "- You are a professional, knowledgeable, and helpful assistant\n"
-                            "- Your primary function is to answer questions about the uploaded document\n"
-                            "- You should be friendly, clear, and concise in your responses\n"
-                            "- Always maintain a professional tone while being approachable\n\n"
+                            "ROLE AND RESPONSIBILITIES:\n"
+                            "- Possess deep technical and functional knowledge of Sage X3 systems\n"
+                            "- Analyze complex scenarios and provide accurate solutions\n"
+                            "- Offer configuration guidance based on industry best practices\n"
+                            "- Troubleshoot issues methodically and effectively\n"
+                            "- Explain technical concepts clearly to users with varying levels of expertise\n\n"
                             
-                            "IMPORTANT GUIDELINES:\n"
-                            "1. DOCUMENT-ONLY RESPONSES: You must ONLY provide information that is contained within the uploaded document. Do not use external knowledge or make assumptions.\n\n"
+                            "APPROACH TO SAGE X3 QUESTIONS:\n"
+                            "1. Begin by understanding the user's context:\n"
+                            "   - Which Sage X3 version they're using\n"
+                            "   - Which specific module(s) are involved\n"
+                            "   - What business process they are working within\n"
+                            "   - What steps they've already taken\n"
+                            "   - Any error messages or specific behaviors they're observing\n\n"
                             
-                            "2. WHEN INFORMATION IS NOT AVAILABLE: If the user asks about something that is not mentioned or explained in the document, you must clearly state:\n"
-                            "   'I'm sorry, but this information is not provided in the uploaded document. Please refer to the document directly or contact the document author for clarification.'\n\n"
+                            "2. Provide accurate and in-depth information:\n"
+                            "   - Include relevant details about configuration setup and parameters\n"
+                            "   - Explain data structures when relevant\n"
+                            "   - Discuss potential impacts of changes\n"
+                            "   - Highlight interdependencies between different parts of the system\n\n"
                             
-                            "3. DOCUMENT CONTEXT USAGE: Use the provided document context to answer questions accurately. Quote relevant sections when helpful, but keep responses concise.\n\n"
+                            "3. Guide through logical troubleshooting steps:\n"
+                            "   - Suggest areas to investigate\n"
+                            "   - Identify potential causes\n"
+                            "   - Provide methods for diagnosing problems\n\n"
                             
-                            "4. CONVERSATION CONTINUITY: Use the chat history to maintain context and provide follow-up responses that build on previous interactions.\n\n"
+                            "4. Recommend best practices for:\n"
+                            "   - System configuration\n"
+                            "   - Usage patterns\n"
+                            "   - Maintenance procedures\n"
+                            "   - Data integrity\n\n"
                             
-                            "5. RESPONSE FORMAT:\n"
-                            "   - Start with a brief, friendly acknowledgment\n"
-                            "   - Provide the answer based on document content\n"
-                            "   - If information is not in the document, clearly state this\n"
-                            "   - Keep responses focused and helpful\n\n"
+                            "5. Consider security and permissions:\n"
+                            "   - Keep in mind security roles and user permissions\n"
+                            "   - Highlight relevant security considerations\n\n"
                             
-                            "6. SCOPE LIMITATIONS: Do not provide:\n"
-                            "   - General advice not based on the document\n"
-                            "   - External information or current events\n"
-                            "   - Personal opinions or interpretations beyond what's stated in the document\n"
-                            "   - Information from other sources\n\n"
+                            "6. Focus on practical, actionable solutions\n\n"
                             
-                            f"DOCUMENT CONTEXT:\n{context_text}\n\n"
-                            f"PREVIOUS CONVERSATION:\n{formatted_chat_history}\n\n"
+                            "If the question is unrelated to Sage X3 systems, politely respond: 'I'm specialized in Sage X3 ERP systems. "
+                            "Please ask me something related to Sage X3 configuration, usage, or troubleshooting.'\n\n"
                             
-                            "Please provide a helpful response based solely on the document content. If the information is not in the document, clearly state this limitation."
+                            "Use the CHAT HISTORY to maintain continuity in the conversation.\n\n"
+                            
+                            "Important instructions when responding:\n"
+                            "- Begin with a concise, professional greeting\n"
+                            "- If you need more context, ask clarifying questions first\n"
+                            "- Use technical Sage X3 terminology appropriately\n"
+                            "- Structure complex answers with clear headings and steps\n"
+                            "- Focus on providing practical, actionable solutions\n\n"
+                            
+                            f"CONTEXT FROM DOCUMENTS:\n{context_text}\n\n"
+                            f"CHAT HISTORY:\n{formatted_chat_history}\n\n"
+                            
+                            "Respond naturally and professionally."
                         )
                         
                         messages = [
                             {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": question}
+                            {"role": "user", "content": f"User's Question: {question}"}
                         ]
                         
                         async def token_callback(token):
                             try:
-                                await websocket.send_text(json.dumps({
-                                    "status": "streaming",
-                                    "token": token
-                                }))
+                                if websocket.client_state.name == 'CONNECTED':
+                                    await websocket.send_text(json.dumps({
+                                        "status": "streaming",
+                                        "token": token
+                                    }))
                             except Exception as e:
                                 logger.error(f"Error sending token: {e}")
+                                return False
+                            return True
                         
                         final_response = await llm_model.stream_chat(messages, token_callback)
                         
@@ -311,12 +327,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                             False
                         )
                     
-                    await websocket.send_text(json.dumps({
-                        "status": "complete",
-                        "answer": final_response,
-                        "time": timer.interval,
-                        "session_id": session_id
-                    }))
+                    if websocket.client_state.name == 'CONNECTED':
+                        await websocket.send_text(json.dumps({
+                            "status": "complete",
+                            "answer": final_response,
+                            "time": timer.interval,
+                            "session_id": session_id
+                        }))
                     
                     logger.info("Question processed successfully")
                 
@@ -326,29 +343,31 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 except Exception as e:
                     logger.error(f"Error in WebSocket chat: {str(e)}")
                     try:
-                        await websocket.send_text(json.dumps({
-                            "status": "error",
-                            "error": str(e)
-                        }))
+                        if websocket.client_state.name == 'CONNECTED':
+                            await websocket.send_text(json.dumps({
+                                "status": "error",
+                                "error": str(e)
+                            }))
                     except:
-                        logger.error("Failed to send error message to client")
+                        logger.error("Failed to send error message to client - connection already closed")
         
         except WebSocketDisconnect:
             logger.info("WebSocket disconnected before full initialization.")
         except Exception as e:
             logger.error(f"WebSocket startup error: {str(e)}")
             try:
-                await websocket.send_text(json.dumps({
-                    "status": "error",
-                    "error": str(e)
-                }))
+                if websocket.client_state.name == 'CONNECTED':
+                    await websocket.send_text(json.dumps({
+                        "status": "error",
+                        "error": str(e)
+                    }))
             except:
-                logger.error("Failed to send startup error to client")
+                logger.error("Failed to send startup error to client - connection already closed")
         finally:
-            if document_id and document_id in active_connections and client_id in active_connections[document_id]:
-                del active_connections[document_id][client_id]
-                if not active_connections[document_id]:
-                    del active_connections[document_id]
+            if "unified_kb" in active_connections and client_id in active_connections["unified_kb"]:
+                del active_connections["unified_kb"][client_id]
+                if not active_connections["unified_kb"]:
+                    del active_connections["unified_kb"]
     
     finally:
         db.close()
@@ -358,22 +377,19 @@ async def websocket_heartbeat():
     while True:
         await asyncio.sleep(30)
         
-        document_ids = list(active_connections.keys())
-        
-        for doc_id in document_ids:
-            if doc_id in active_connections:
-                client_ids = list(active_connections[doc_id].keys())
-                
-                for client_id in client_ids:
-                    try:
-                        if client_id in active_connections.get(doc_id, {}):
-                            websocket = active_connections[doc_id][client_id]
-                            await websocket.send_text(json.dumps({
-                                "status": "heartbeat"
-                            }))
-                    except Exception as e:
-                        logger.error(f"Error sending heartbeat: {str(e)}")
-                        if doc_id in active_connections and client_id in active_connections[doc_id]:
-                            del active_connections[doc_id][client_id]
-                            if not active_connections[doc_id]:
-                                del active_connections[doc_id]
+        if "unified_kb" in active_connections:
+            client_ids = list(active_connections["unified_kb"].keys())
+            
+            for client_id in client_ids:
+                try:
+                    if client_id in active_connections.get("unified_kb", {}):
+                        websocket = active_connections["unified_kb"][client_id]
+                        await websocket.send_text(json.dumps({
+                            "status": "heartbeat"
+                        }))
+                except Exception as e:
+                    logger.error(f"Error sending heartbeat: {str(e)}")
+                    if "unified_kb" in active_connections and client_id in active_connections["unified_kb"]:
+                        del active_connections["unified_kb"][client_id]
+                        if not active_connections["unified_kb"]:
+                            del active_connections["unified_kb"]
