@@ -4,12 +4,6 @@ import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
-from langchain.prompts import ChatPromptTemplate
-from langchain_core.documents import Document as LangChainDocument
-from langchain_core.retrievers import BaseRetriever
-from langchain.callbacks.base import BaseCallbackHandler
 from app.database import get_db
 from app.models.user import User
 from app.models.chat import ChatSession
@@ -31,21 +25,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-# Initialize services
 document_store = DocumentStore(settings.OUTPUT_FOLDER)
 llm_model = LLMModel()
 active_connections = {}
-
-def get_static_retriever(documents):
-    """Helper function to create static retriever"""
-    class StaticRetriever(BaseRetriever):
-        def _get_relevant_documents(self, query: str):
-            return documents
-
-        async def _aget_relevant_documents(self, query: str):
-            return documents
-
-    return StaticRetriever()
 
 @router.post("/sessions", response_model=ChatSessionSchema)
 def create_chat_session(
@@ -109,7 +91,6 @@ def delete_session(
 async def websocket_endpoint(websocket: WebSocket, token: str):
     await websocket.accept()
     
-    # Verify token
     username = verify_token(token)
     if not username:
         await websocket.send_text(json.dumps({
@@ -119,7 +100,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         await websocket.close()
         return
     
-    # Get user from database
     db = next(get_db())
     try:
         user = db.query(User).filter(User.username == username).first()
@@ -140,15 +120,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         chat_service = ChatService(db, document_store)
         
         try:
-            # Step 1: Wait for initialization message
             logger.info("Waiting for initialization message...")
             
             try:
-                # Wait for the first message with a timeout
                 init_data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
                 logger.info(f"Received init data: {init_data}")
                 
-                # Handle empty or non-JSON data
                 if not init_data or init_data.strip() == "":
                     await websocket.send_text(json.dumps({
                         "status": "error",
@@ -185,12 +162,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             
             logger.info(f"Initializing with document_id: {document_id}, session_id: {session_id}")
             
-            # Store connection
             if document_id not in active_connections:
                 active_connections[document_id] = {}
             active_connections[document_id][client_id] = websocket
             
-            # Validate document status
             faiss_status = document_store.get_document_status(document_id)
             if not faiss_status:
                 await websocket.send_text(json.dumps({
@@ -206,11 +181,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 }))
                 return
             
-            # Create or get session
             if session_id:
                 session = chat_service.get_session_by_id(session_id, user.id)
                 if not session:
-                    # Create new session if provided session_id doesn't exist
                     session = chat_service.create_session(user.id, document_id)
                     session_id = session.session_id
                     logger.info(f"Created new session as provided session_id not found: {session_id}")
@@ -219,51 +192,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 session_id = session.session_id
                 logger.info(f"Created new session: {session_id}")
             
-            # Sage Assistant Prompt Template
-            base_prompt = (
-                "You are an Sage Assistant - a helpful AI assistant designed to help users understand and navigate documents.\n\n"
-                
-                "Your role and responsibilities:\n"
-                "- You are a professional, knowledgeable, and helpful assistant\n"
-                "- Your primary function is to answer questions about the uploaded document\n"
-                "- You should be friendly, clear, and concise in your responses\n"
-                "- Always maintain a professional tone while being approachable\n\n"
-                
-                "IMPORTANT GUIDELINES:\n"
-                "1. DOCUMENT-ONLY RESPONSES: You must ONLY provide information that is contained within the uploaded document. Do not use external knowledge or make assumptions.\n\n"
-                
-                "2. WHEN INFORMATION IS NOT AVAILABLE: If the user asks about something that is not mentioned or explained in the document, you must clearly state:\n"
-                "   'I'm sorry, but this information is not provided in the uploaded document. Please refer to the document directly or contact the document author for clarification.'\n\n"
-                
-                "3. DOCUMENT CONTEXT USAGE: Use the provided document context to answer questions accurately. Quote relevant sections when helpful, but keep responses concise.\n\n"
-                
-                "4. CONVERSATION CONTINUITY: Use the chat history to maintain context and provide follow-up responses that build on previous interactions.\n\n"
-                
-                "5. RESPONSE FORMAT:\n"
-                "   - Start with a brief, friendly acknowledgment\n"
-                "   - Provide the answer based on document content\n"
-                "   - If information is not in the document, clearly state this\n"
-                "   - Keep responses focused and helpful\n\n"
-                
-                "6. SCOPE LIMITATIONS: Do not provide:\n"
-                "   - General advice not based on the document\n"
-                "   - External information or current events\n"
-                "   - Personal opinions or interpretations beyond what's stated in the document\n"
-                "   - Information from other sources\n\n"
-                
-                "DOCUMENT CONTEXT:\n{context}\n\n"
-                "PREVIOUS CONVERSATION:\n{chat_history}\n\n"
-                "USER QUESTION: {input}\n\n"
-                
-                "Please provide a helpful response based solely on the document content. If the information is not in the document, clearly state this limitation."
-            )
-            
-            prompt_template = ChatPromptTemplate.from_messages([
-                ("system", base_prompt),
-                ("human", "{input}")
-            ])
-            
-            # Confirm initialization
             await websocket.send_text(json.dumps({
                 "status": "initialized",
                 "document_id": document_id,
@@ -273,14 +201,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             is_initialized = True
             logger.info("Sage WebSocket initialized successfully")
             
-            # Step 2: Main chat loop
             while True:
                 try:
                     logger.info("Waiting for question...")
                     data = await websocket.receive_text()
                     logger.info(f"Received data: {data}")
                     
-                    # Handle empty messages
                     if not data or data.strip() == "":
                         await websocket.send_text(json.dumps({
                             "status": "error", 
@@ -292,7 +218,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         message_data = json.loads(data)
                         question = message_data.get("question", data)
                     except json.JSONDecodeError:
-                        # If it's not JSON, treat the entire string as the question
                         question = data.strip()
                     
                     if not question or not isinstance(question, str) or question.strip() == "":
@@ -305,79 +230,87 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                     logger.info(f"Processing question: {question}")
                     
                     with Timer() as timer:
-                        # Retrieve context chunks from document
                         context_chunks = await document_store.search(
                             document_id,
                             question,
                             k=settings.SIMILAR_DOCS_COUNT
                         )
                         
-                        documents = [LangChainDocument(page_content=chunk) for chunk in context_chunks]
-                        retriever = get_static_retriever(documents)
-                        
-                        # Create streaming callback handler
-                        class WebSocketCallbackHandler(BaseCallbackHandler):
-                            def __init__(self, websocket):
-                                self.websocket = websocket
-                                self.collected_tokens = ""
-                                
-                            async def on_llm_new_token(self, token: str, **kwargs):
-                                self.collected_tokens += token
-                                try:
-                                    await self.websocket.send_text(json.dumps({
-                                        "status": "streaming",
-                                        "token": token
-                                    }))
-                                except Exception as e:
-                                    logger.error(f"Error sending token: {e}")
-                        
-                        # Create callback handler
-                        callback_handler = WebSocketCallbackHandler(websocket)
-                        
-                        # Format chat history
                         formatted_chat_history = ""
                         for entry in chat_history:
                             formatted_chat_history += f"User: {entry['question']}\nSage: {entry['answer']}\n\n"
                         
-                        # Create retrieval-based QA chain with streaming
-                        qa_chain = create_retrieval_chain(
-                            retriever,
-                            create_stuff_documents_chain(
-                                llm_model.get_llm().with_config(
-                                    {"callbacks": [callback_handler]}
-                                ),
-                                prompt_template
-                            )
+                        context_text = "\n\n".join(context_chunks) if context_chunks else "(No relevant content found in the document for your question)"
+                        
+                        system_prompt = (
+                            "You are Sage Assistant - a helpful AI assistant designed to help users understand and navigate documents.\n\n"
+                            
+                            "Your role and responsibilities:\n"
+                            "- You are a professional, knowledgeable, and helpful assistant\n"
+                            "- Your primary function is to answer questions about the uploaded document\n"
+                            "- You should be friendly, clear, and concise in your responses\n"
+                            "- Always maintain a professional tone while being approachable\n\n"
+                            
+                            "IMPORTANT GUIDELINES:\n"
+                            "1. DOCUMENT-ONLY RESPONSES: You must ONLY provide information that is contained within the uploaded document. Do not use external knowledge or make assumptions.\n\n"
+                            
+                            "2. WHEN INFORMATION IS NOT AVAILABLE: If the user asks about something that is not mentioned or explained in the document, you must clearly state:\n"
+                            "   'I'm sorry, but this information is not provided in the uploaded document. Please refer to the document directly or contact the document author for clarification.'\n\n"
+                            
+                            "3. DOCUMENT CONTEXT USAGE: Use the provided document context to answer questions accurately. Quote relevant sections when helpful, but keep responses concise.\n\n"
+                            
+                            "4. CONVERSATION CONTINUITY: Use the chat history to maintain context and provide follow-up responses that build on previous interactions.\n\n"
+                            
+                            "5. RESPONSE FORMAT:\n"
+                            "   - Start with a brief, friendly acknowledgment\n"
+                            "   - Provide the answer based on document content\n"
+                            "   - If information is not in the document, clearly state this\n"
+                            "   - Keep responses focused and helpful\n\n"
+                            
+                            "6. SCOPE LIMITATIONS: Do not provide:\n"
+                            "   - General advice not based on the document\n"
+                            "   - External information or current events\n"
+                            "   - Personal opinions or interpretations beyond what's stated in the document\n"
+                            "   - Information from other sources\n\n"
+                            
+                            f"DOCUMENT CONTEXT:\n{context_text}\n\n"
+                            f"PREVIOUS CONVERSATION:\n{formatted_chat_history}\n\n"
+                            
+                            "Please provide a helpful response based solely on the document content. If the information is not in the document, clearly state this limitation."
                         )
                         
-                        # Generate response
-                        result = await qa_chain.ainvoke({
-                            "input": question,
-                            "chat_history": formatted_chat_history,
-                            "context": "\n\n".join(context_chunks) if context_chunks else "(No relevant content found in the document for your question)"
-                        })
-                        final_response = result.get("answer", "").strip()
+                        messages = [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": question}
+                        ]
                         
-                        # Add to chat history
+                        async def token_callback(token):
+                            try:
+                                await websocket.send_text(json.dumps({
+                                    "status": "streaming",
+                                    "token": token
+                                }))
+                            except Exception as e:
+                                logger.error(f"Error sending token: {e}")
+                        
+                        final_response = await llm_model.stream_chat(messages, token_callback)
+                        
                         chat_history.append({
                             "question": question,
                             "answer": final_response
                         })
                         
-                        # Keep chat history to reasonable size
                         if len(chat_history) > 10:
                             chat_history = chat_history[-10:]
                         
-                        # Save to database
                         chat_service.save_message(
                             session.id, 
                             question, 
                             final_response, 
-                            timer.interval * 1000,  # Convert to milliseconds
-                            False  # No external data used
+                            timer.interval * 1000,
+                            False
                         )
                     
-                    # Send final response
                     await websocket.send_text(json.dumps({
                         "status": "complete",
                         "answer": final_response,
@@ -412,7 +345,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             except:
                 logger.error("Failed to send startup error to client")
         finally:
-            # Clean up connection
             if document_id and document_id in active_connections and client_id in active_connections[document_id]:
                 del active_connections[document_id][client_id]
                 if not active_connections[document_id]:
@@ -421,7 +353,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
     finally:
         db.close()
 
-# Background task for heartbeat
 async def websocket_heartbeat():
     """Send periodic heartbeats to keep WebSocket connections alive"""
     while True:

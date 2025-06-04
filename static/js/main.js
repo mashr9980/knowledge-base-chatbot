@@ -1,8 +1,6 @@
-// Global variables
 window.currentUser = window.currentUser || null;
 window.apiBaseUrl = window.location.origin;
 
-// Utility functions
 function showLoading() {
     const overlay = document.getElementById('loading-overlay');
     if (overlay) {
@@ -30,7 +28,6 @@ function showAlert(message, type = 'info') {
     
     alertContainer.appendChild(alert);
     
-    // Auto remove after 5 seconds
     setTimeout(() => {
         if (alert.parentElement) {
             alert.remove();
@@ -66,22 +63,18 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Navigation functions
 function showSection(sectionId) {
     console.log('Showing section:', sectionId);
     
-    // Hide all sections
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
     });
     
-    // Show target section
     const targetSection = document.getElementById(sectionId + '-section');
     if (targetSection) {
         targetSection.classList.add('active');
     } else {
         console.error('Section not found:', sectionId + '-section');
-        // Try without the '-section' suffix
         const altSection = document.getElementById(sectionId);
         if (altSection) {
             altSection.classList.add('active');
@@ -91,26 +84,22 @@ function showSection(sectionId) {
 
 function showHome() {
     showSection('home');
-    // Update navigation
     updateNavigation();
 }
 
 function showLogin() {
     showSection('login');
-    // Update navigation
     updateNavigation();
 }
 
 function showSignup() {
     showSection('signup');
-    // Update navigation
     updateNavigation();
 }
 
 function showDashboard() {
     showSection('dashboard');
     loadDashboardData();
-    // Update navigation for authenticated user
     updateNavigationForUser();
 }
 
@@ -158,7 +147,6 @@ function updateNavigationForUser() {
     updateNavigation();
 }
 
-// Authentication functions
 function getToken() {
     return localStorage.getItem('Sage_token');
 }
@@ -185,7 +173,6 @@ function logout() {
     }, 1000);
 }
 
-// API functions
 async function apiCall(endpoint, options = {}) {
     const token = getToken();
     const defaultOptions = {
@@ -235,7 +222,6 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
-// Load dashboard data
 async function loadDashboardData() {
     if (!isAuthenticated()) {
         console.log('Not authenticated, showing login');
@@ -247,7 +233,6 @@ async function loadDashboardData() {
         showLoading();
         console.log('Loading dashboard data...');
         
-        // Load user profile
         try {
             window.currentUser = await apiCall('/users/me');
             console.log('Current user:', window.currentUser);
@@ -258,7 +243,11 @@ async function loadDashboardData() {
                     userNameEl.textContent = window.currentUser.full_name;
                 }
                 
-                // Show admin button if user is admin
+                const userRoleEl = document.getElementById('user-role');
+                if (userRoleEl) {
+                    userRoleEl.textContent = window.currentUser.role === 'admin' ? 'Administrator' : 'User';
+                }
+                
                 const adminBtn = document.getElementById('admin-btn');
                 if (window.currentUser.role === 'admin' && adminBtn) {
                     adminBtn.style.display = 'inline-flex';
@@ -270,7 +259,6 @@ async function loadDashboardData() {
             return;
         }
         
-        // Load user sessions
         try {
             const sessions = await apiCall('/chat/sessions');
             console.log('User sessions:', sessions);
@@ -279,25 +267,37 @@ async function loadDashboardData() {
             if (totalSessionsEl) {
                 totalSessionsEl.textContent = sessions ? sessions.length : 0;
             }
+            
+            const lastActivityEl = document.getElementById('last-activity');
+            if (lastActivityEl && sessions && sessions.length > 0) {
+                const lastSession = sessions[0];
+                const lastDate = new Date(lastSession.updated_at || lastSession.created_at);
+                const now = new Date();
+                const diffHours = Math.floor((now - lastDate) / (1000 * 60 * 60));
+                
+                if (diffHours < 1) {
+                    lastActivityEl.textContent = 'Just now';
+                } else if (diffHours < 24) {
+                    lastActivityEl.textContent = `${diffHours}h ago`;
+                } else {
+                    lastActivityEl.textContent = `${Math.floor(diffHours / 24)}d ago`;
+                }
+            }
         } catch (error) {
             console.error('Failed to load sessions:', error);
-            // Don't show error for sessions as it's not critical
             const totalSessionsEl = document.getElementById('total-sessions');
             if (totalSessionsEl) {
                 totalSessionsEl.textContent = '0';
             }
         }
         
-        // Load available documents for regular users
         try {
             await loadAvailableDocuments();
         } catch (error) {
             console.error('Failed to load documents:', error);
-            // Show empty state for documents
             showEmptyDocumentsState();
         }
         
-        // Update navigation
         updateNavigationForUser();
         
     } catch (error) {
@@ -310,28 +310,18 @@ async function loadDashboardData() {
 
 async function loadAvailableDocuments() {
     try {
-        let documents = [];
-        
-        // Try to get documents - this will work for admin users
-        // For regular users, you might need a different endpoint
-        try {
-            documents = await apiCall('/admin/documents');
-        } catch (error) {
-            console.log('Cannot access admin documents, user might not be admin');
-            documents = [];
-        }
-        
+        const documents = await apiCall('/users/documents');
         console.log('Available documents:', documents);
         
         const documentsListEl = document.getElementById('documents-list');
         const totalDocumentsEl = document.getElementById('total-documents');
         
         if (totalDocumentsEl) {
-            totalDocumentsEl.textContent = documents.length;
+            totalDocumentsEl.textContent = documents ? documents.length : 0;
         }
         
         if (documentsListEl) {
-            if (documents.length === 0) {
+            if (!documents || documents.length === 0) {
                 showEmptyDocumentsState();
             } else {
                 renderDocumentsList(documents);
@@ -341,6 +331,7 @@ async function loadAvailableDocuments() {
     } catch (error) {
         console.error('Error loading documents:', error);
         showEmptyDocumentsState();
+        throw error;
     }
 }
 
@@ -352,6 +343,9 @@ function showEmptyDocumentsState() {
                 <i class="fas fa-file-alt" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
                 <h3>No Documents Available</h3>
                 <p>Contact your administrator to upload documents to the knowledge base.</p>
+                <button class="btn btn-primary" onclick="window.location.reload()" style="margin-top: 1rem;">
+                    <i class="fas fa-refresh"></i> Refresh
+                </button>
             </div>
         `;
     }
@@ -366,7 +360,9 @@ function renderDocumentsList(documents) {
     const documentsListEl = document.getElementById('documents-list');
     if (!documentsListEl) return;
     
-    const completedDocs = documents.filter(doc => doc.status === 'completed');
+    const completedDocs = documents.filter(doc => 
+        doc.status === 'completed' && doc.chunks_count > 0
+    );
     
     if (completedDocs.length === 0) {
         documentsListEl.innerHTML = `
@@ -374,6 +370,9 @@ function renderDocumentsList(documents) {
                 <i class="fas fa-clock" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
                 <h3>Documents Processing</h3>
                 <p>Documents are being processed. Please check back later.</p>
+                <button class="btn btn-primary" onclick="window.location.reload()" style="margin-top: 1rem;">
+                    <i class="fas fa-refresh"></i> Refresh
+                </button>
             </div>
         `;
         return;
@@ -397,12 +396,10 @@ function renderDocumentsList(documents) {
 }
 
 function startChatWithDocument(documentId) {
-    // Store the selected document ID and redirect to chat
     localStorage.setItem('selected_document_id', documentId);
     showChat();
 }
 
-// Auto-verify authentication on page load
 async function verifyAuthentication() {
     if (isAuthenticated()) {
         try {
@@ -420,11 +417,9 @@ async function verifyAuthentication() {
     return false;
 }
 
-// Initialize page
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded, initializing...');
     
-    // Check authentication
     const isAuthed = await verifyAuthentication();
     
     if (isAuthed) {
@@ -435,15 +430,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         showHome();
     }
     
-    // Set up navigation event listeners
     setupEventListeners();
 });
 
 function setupEventListeners() {
-    // Add any additional event listeners here
     console.log('Event listeners set up');
     
-    // Handle browser back/forward buttons
     window.addEventListener('popstate', function(event) {
         if (isAuthenticated()) {
             showDashboard();

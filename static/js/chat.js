@@ -1,5 +1,3 @@
-// Chat functionality with WebSocket streaming
-
 let socket = null;
 let currentDocumentId = null;
 let currentSessionId = null;
@@ -9,8 +7,6 @@ let reconnectAttempts = 0;
 let maxReconnectAttempts = 5;
 let chatSessions = [];
 
-// Use window.currentUser instead of declaring a new variable
-// let currentUser = null;  // Remove this line
 let apiBaseUrl = window.location.origin;
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -18,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function() {
     checkChatAccess();
 });
 
-// Authentication and access control
 async function checkChatAccess() {
     if (!isAuthenticated()) {
         console.log('Not authenticated, redirecting to login');
@@ -35,7 +30,6 @@ async function checkChatAccess() {
         window.currentUser = user;
         console.log('Chat access granted for:', window.currentUser.username);
         
-        // Initialize chat interface
         setupChatEventListeners();
         loadInitialChatData();
         
@@ -126,7 +120,6 @@ function showAlert(message, type = 'info') {
     
     alertContainer.appendChild(alert);
     
-    // Auto remove after 5 seconds
     setTimeout(() => {
         if (alert.parentElement) {
             alert.remove();
@@ -154,11 +147,9 @@ function formatDate(dateString) {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 }
 
-// Event listeners setup
 function setupChatEventListeners() {
     console.log('Setting up chat event listeners...');
     
-    // Chat input
     const chatInput = document.getElementById('chat-input');
     if (chatInput) {
         chatInput.addEventListener('keypress', handleKeyPress);
@@ -166,34 +157,28 @@ function setupChatEventListeners() {
         chatInput.addEventListener('input', handleInputChange);
     }
     
-    // Send button
     const sendBtn = document.getElementById('send-btn');
     if (sendBtn) {
         sendBtn.addEventListener('click', sendMessage);
     }
     
-    // Document selector
     const documentSelect = document.getElementById('document-select');
     if (documentSelect) {
         documentSelect.addEventListener('change', onDocumentChange);
     }
     
-    // Window events
     window.addEventListener('beforeunload', () => {
         if (socket) {
             socket.close();
         }
     });
     
-    // Connection status updates
     updateConnectionStatus('disconnected');
     
-    // Mobile sidebar controls
     setupMobileControls();
 }
 
 function setupMobileControls() {
-    // Add mobile menu button for small screens
     if (window.innerWidth <= 768) {
         const chatHeader = document.querySelector('.chat-header');
         if (chatHeader && !chatHeader.querySelector('.mobile-menu-btn')) {
@@ -209,7 +194,6 @@ function setupMobileControls() {
         }
     }
     
-    // Handle window resize
     window.addEventListener('resize', () => {
         if (window.innerWidth > 768) {
             const sidebar = document.querySelector('.chat-sidebar');
@@ -227,19 +211,15 @@ function toggleSidebar() {
     }
 }
 
-// Data loading functions
 async function loadInitialChatData() {
     try {
         showLoading();
         console.log('Loading initial chat data...');
         
-        // Load available documents
         await loadAvailableDocuments();
         
-        // Load user's chat sessions
         await loadChatSessions();
         
-        // Check if there's a pre-selected document from dashboard
         const selectedDocId = localStorage.getItem('selected_document_id');
         if (selectedDocId) {
             localStorage.removeItem('selected_document_id');
@@ -260,25 +240,14 @@ async function loadInitialChatData() {
 
 async function loadAvailableDocuments() {
     try {
-        let documents = [];
-        
-        // Try to get documents
-        try {
-            documents = await apiCall('/admin/documents');
-        } catch (error) {
-            console.log('Cannot access admin documents:', error);
-            documents = [];
-        }
-        
+        const documents = await apiCall('/users/documents');
         console.log('Available documents:', documents);
         
         const documentSelect = document.getElementById('document-select');
         if (!documentSelect) return;
         
-        // Clear existing options
         documentSelect.innerHTML = '<option value="">Choose a document...</option>';
         
-        // Add completed documents
         const completedDocs = documents.filter(doc => 
             doc.status === 'completed' && doc.chunks_count > 0
         );
@@ -343,31 +312,25 @@ async function loadChatSession(sessionId, documentId) {
         showLoading();
         console.log(`Loading chat session: ${sessionId} for document: ${documentId}`);
         
-        // Set current session
         currentSessionId = sessionId;
         currentDocumentId = documentId;
         
-        // Update document selector
         const documentSelect = document.getElementById('document-select');
         if (documentSelect) {
             documentSelect.value = documentId;
         }
         
-        // Update chat title
         const session = chatSessions.find(s => s.session_id === sessionId);
         if (session) {
             document.getElementById('chat-title').textContent = session.session_name;
         }
         
-        // Load session messages
         const messages = await apiCall(`/chat/sessions/${sessionId}/messages`);
         console.log('Session messages loaded:', messages);
         
-        // Clear chat messages
         const chatMessages = document.getElementById('chat-messages');
         chatMessages.innerHTML = '';
         
-        // Render messages
         if (messages && messages.length > 0) {
             messages.forEach(message => {
                 addMessageToChat(message.message, 'user');
@@ -377,15 +340,12 @@ async function loadChatSession(sessionId, documentId) {
             addWelcomeMessage();
         }
         
-        // Connect WebSocket if not connected
         if (!isConnected) {
             connectWebSocket();
         } else {
-            // Re-initialize with new document
             initializeWebSocketSession();
         }
         
-        // Update UI
         enableChatInput();
         renderChatSessions();
         
@@ -397,7 +357,6 @@ async function loadChatSession(sessionId, documentId) {
     }
 }
 
-// Document selection handling
 function onDocumentChange() {
     const documentSelect = document.getElementById('document-select');
     const documentId = documentSelect.value;
@@ -413,21 +372,17 @@ function onDocumentChange() {
     }
     
     currentDocumentId = documentId;
-    currentSessionId = null; // Reset session when changing document
+    currentSessionId = null;
     
-    // Update chat title
     const selectedOption = documentSelect.options[documentSelect.selectedIndex];
     document.getElementById('chat-title').textContent = `Chat: ${selectedOption.textContent}`;
     updateChatStatus('Connecting...');
     
-    // Clear existing messages
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML = '';
     
-    // Add welcome message
     addWelcomeMessage();
     
-    // Connect WebSocket
     connectWebSocket();
 }
 
@@ -447,7 +402,6 @@ function addWelcomeMessage() {
     scrollToBottom();
 }
 
-// WebSocket connection handling
 function connectWebSocket() {
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.close();
@@ -461,7 +415,6 @@ function connectWebSocket() {
     
     updateConnectionStatus('connecting');
     
-    // Use WSS for HTTPS, WS for HTTP
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/chat/ws/${token}`;
     
@@ -491,14 +444,13 @@ function connectWebSocket() {
         updateConnectionStatus('disconnected');
         
         if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
-            // Attempt to reconnect
             setTimeout(() => {
                 reconnectAttempts++;
                 console.log(`Reconnection attempt ${reconnectAttempts}`);
                 if (currentDocumentId) {
                     connectWebSocket();
                 }
-            }, Math.pow(2, reconnectAttempts) * 1000); // Exponential backoff
+            }, Math.pow(2, reconnectAttempts) * 1000);
         }
     };
     
@@ -547,7 +499,6 @@ function handleWebSocketMessage(data) {
             updateChatStatus('Ready to chat');
             enableChatInput();
             
-            // Update sessions list if new session was created
             if (!chatSessions.find(s => s.session_id === currentSessionId)) {
                 loadChatSessions();
             }
@@ -566,10 +517,9 @@ function handleWebSocketMessage(data) {
             updateChatStatus('Ready to chat');
             enableChatInput();
             
-            // Save session ID if it was created
             if (data.session_id && data.session_id !== currentSessionId) {
                 currentSessionId = data.session_id;
-                loadChatSessions(); // Refresh sessions list
+                loadChatSessions();
             }
             break;
             
@@ -581,7 +531,6 @@ function handleWebSocketMessage(data) {
             break;
             
         case 'heartbeat':
-            // Handle heartbeat silently
             break;
             
         default:
@@ -589,7 +538,6 @@ function handleWebSocketMessage(data) {
     }
 }
 
-// Message handling
 function sendMessage() {
     const chatInput = document.getElementById('chat-input');
     const message = chatInput.value.trim();
@@ -605,21 +553,16 @@ function sendMessage() {
     
     console.log('Sending message:', message);
     
-    // Add user message to chat
     addMessageToChat(message, 'user');
     
-    // Clear input
     chatInput.value = '';
     adjustTextareaHeight(chatInput);
     
-    // Disable input while processing
     disableChatInput();
     updateChatStatus('Processing...');
     
-    // Start assistant message
     startAssistantMessage();
     
-    // Send message via WebSocket
     const messageData = { question: message };
     console.log('Sending message data:', messageData);
     socket.send(JSON.stringify(messageData));
@@ -635,7 +578,6 @@ function handleKeyPress(event) {
 function handleInputChange(event) {
     adjustTextareaHeight(event.target);
     
-    // Update send button state
     const sendBtn = document.getElementById('send-btn');
     if (sendBtn) {
         sendBtn.disabled = !event.target.value.trim() || !isConnected;
@@ -720,7 +662,6 @@ function appendToCurrentMessage(token) {
     
     const content = currentMessage.querySelector('.message-content');
     
-    // Initialize content if it's the first token
     if (content.innerHTML.includes('typing-indicator')) {
         content.innerHTML = token;
     } else {
@@ -750,7 +691,6 @@ function removeCurrentStreamingMessage() {
 function formatMessage(message) {
     if (!message) return '';
     
-    // Basic message formatting
     return message
         .replace(/\n/g, '<br>')
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -759,7 +699,6 @@ function formatMessage(message) {
         .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
 }
 
-// UI state management
 function enableChatInput() {
     const chatInput = document.getElementById('chat-input');
     const sendBtn = document.getElementById('send-btn');
@@ -822,7 +761,6 @@ function scrollToBottom() {
     }
 }
 
-// Chat management functions
 function newChat() {
     if (!currentDocumentId) {
         showAlert('Please select a document first', 'warning');
@@ -831,23 +769,19 @@ function newChat() {
     
     console.log('Starting new chat for document:', currentDocumentId);
     
-    // Clear current session
     currentSessionId = null;
     
-    // Clear messages
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML = '';
     
-    // Add welcome message
     addWelcomeMessage();
     
-    // Re-initialize WebSocket session
     if (isConnected) {
         initializeWebSocketSession();
     }
     
     updateChatStatus('New chat started');
-    renderChatSessions(); // Update sessions list
+    renderChatSessions();
 }
 
 function clearChat() {
@@ -858,7 +792,6 @@ function clearChat() {
     newChat();
 }
 
-// Utility functions
 function showLoading() {
     const loadingOverlay = document.getElementById('loading-overlay') || createLoadingOverlay();
     loadingOverlay.classList.add('active');
@@ -898,7 +831,6 @@ function createLoadingOverlay() {
         text-align: center;
     `;
     
-    // Add spinner styles
     const style = document.createElement('style');
     style.textContent = `
         .spinner {
@@ -922,7 +854,6 @@ function createLoadingOverlay() {
     return overlay;
 }
 
-// Add custom CSS for better chat styling
 const chatStyles = `
     .alert {
         padding: 1rem 1.5rem;
@@ -982,29 +913,24 @@ const chatStyles = `
     }
 `;
 
-// Inject the styles
 const chatStyleSheet = document.createElement('style');
 chatStyleSheet.textContent = chatStyles;
 document.head.appendChild(chatStyleSheet);
 
-// Initialize chat interface when page loads
 window.addEventListener('load', function() {
     console.log('Chat page fully loaded');
     
-    // Additional initialization if needed
     const chatInput = document.getElementById('chat-input');
     if (chatInput) {
         chatInput.focus();
     }
 });
 
-// Handle page visibility changes to manage WebSocket connections
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
         console.log('Page hidden, maintaining WebSocket connection');
     } else {
         console.log('Page visible again');
-        // Reconnect if needed
         if (!isConnected && currentDocumentId) {
             setTimeout(connectWebSocket, 1000);
         }

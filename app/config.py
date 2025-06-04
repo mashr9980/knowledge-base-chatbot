@@ -18,11 +18,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 300
     
-    # OpenAI
-    OPENAI_API_KEY: str = ""
+    # Ollama settings
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
     
-    # Model settings
-    MODEL_NAME: str = "gpt-4o"
+    # Model settings for Gemma 2:12b
+    MODEL_NAME: str = "gemma2:12b"
     TEMPERATURE: float = 0.0
     TOP_P: float = 0.95
     REPETITION_PENALTY: float = 1.15
@@ -39,11 +39,11 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: str = "pdf,docx,txt,xlsx"
     UPLOAD_DIR: str = "uploads"
     
-    # Server settings - Now calculated based on hardware
+    # Server settings
     HOST: str = "0.0.0.0"
     PORT: int = 7201
     
-    # Hardware-optimized settings (will be calculated)
+    # Hardware-optimized settings
     WORKERS: int = 1
     DOC_PROCESSING_WORKERS: int = 1
     MAX_CONCURRENT_CONNECTIONS: int = 100
@@ -56,12 +56,9 @@ class Settings(BaseSettings):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Calculate optimal workers and process settings based on hardware
         self._calculate_hardware_settings()
     
     def _calculate_hardware_settings(self):
-        """Calculate optimal settings based on available hardware resources"""
-        # Get system information
         cpu_count = multiprocessing.cpu_count()
         memory_gb = psutil.virtual_memory().total / (1024**3)
         
@@ -72,25 +69,21 @@ class Settings(BaseSettings):
         elif cpu_count <= 8:
             self.WORKERS = int(cpu_count * 1.5)
         else:
-            # For high-core systems, cap to prevent resource exhaustion
             self.WORKERS = min(16, cpu_count)
         
         self.DOC_PROCESSING_WORKERS = max(1, cpu_count // 2)
 
-        available_memory_mb = memory_gb * 1024 * 0.7  # Use 70% of available memory
+        available_memory_mb = memory_gb * 1024 * 0.7
         self.MAX_CONCURRENT_CONNECTIONS = int(available_memory_mb / 10)
         
-        # WebSocket settings
-        self.WS_MAX_SIZE = 16777216  # 16MB
+        self.WS_MAX_SIZE = 16777216
         self.WS_PING_INTERVAL = 30
         self.WS_PING_TIMEOUT = 10
         
-        # Connection pool settings for database
         self.DB_POOL_SIZE = min(20, self.WORKERS * 2)
         self.DB_MAX_OVERFLOW = min(30, self.WORKERS * 3)
         
-        # Cache settings
-        self.EMBEDDING_CACHE_SIZE = min(1000, int(memory_gb * 100))  
+        self.EMBEDDING_CACHE_SIZE = min(1000, int(memory_gb * 100))
         
         print(f"Hardware Configuration Detected:")
         print(f"CPU Cores: {cpu_count}")
@@ -101,6 +94,7 @@ class Settings(BaseSettings):
         print(f"Max Concurrent Connections: {self.MAX_CONCURRENT_CONNECTIONS}")
         print(f"Database Pool Size: {self.DB_POOL_SIZE}")
         print(f"Embedding Cache Size: {self.EMBEDDING_CACHE_SIZE}")
+        print(f"Using Ollama Model: {self.MODEL_NAME} at {self.OLLAMA_BASE_URL}")
     
     @property
     def DATABASE_URL(self) -> str:
