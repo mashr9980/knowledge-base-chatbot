@@ -47,8 +47,8 @@ function validateField(input) {
     
     // Password validation
     if (input.type === 'password' && value) {
-        if (value.length < 6) {
-            showFieldError(formGroup, 'Password must be at least 6 characters');
+        if (value.length < 2) {
+            showFieldError(formGroup, 'Password must be at least 2 characters');
             return false;
         }
     }

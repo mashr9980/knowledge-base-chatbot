@@ -9,3 +9,4 @@ app/services/__pycache__/
 alembic.ini
 __pycache__/
 .env
+uploads/

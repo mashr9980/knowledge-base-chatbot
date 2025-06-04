@@ -69,11 +69,21 @@ def get_pool_status():
     """
     Get current connection pool status for monitoring
     """
-    pool = engine.pool
-    return {
-        "size": pool.size(),
-        "checked_in": pool.checkedin(),
-        "checked_out": pool.checkedout(),
-        "overflow": pool.overflow(),
-        "invalid": pool.invalid()
-    }
+    try:
+        pool = engine.pool
+        return {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "invalid": getattr(pool, 'invalid', lambda: 0)()  # Some pool types don't have invalid()
+        }
+    except Exception as e:
+        return {
+            "size": 0,
+            "checked_in": 0,
+            "checked_out": 0,
+            "overflow": 0,
+            "invalid": 0,
+            "error": str(e)
+        }

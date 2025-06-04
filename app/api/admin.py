@@ -128,7 +128,7 @@ async def upload_document(
             file_size=len(file_content),
             file_type=file_type,
             uploaded_by=admin_user.id,
-            status="processing"  # Set initial status
+            status="processing" 
         )
         
         db.add(document)
@@ -140,8 +140,6 @@ async def upload_document(
         # Add to document store metadata (non-blocking)
         await document_store.add_document(document_id, file.filename)
         
-        # Queue document for background processing
-        # Priority 1 = high priority for admin uploads
         queue_document_processing(document_id, temp_file_path, priority=1)
         
         logger.info(f"Document {document_id} queued for processing")

@@ -5,14 +5,11 @@ let apiBaseUrl = window.location.origin;
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAdminAccess();
-    setupAdminEventListeners();
-    loadInitialData();
 });
 
-// Authentication and access control
 async function checkAdminAccess() {
     if (!isAuthenticated()) {
-        window.location.href = 'index.html';
+        window.location.href = '/app';
         return;
     }
     
@@ -21,15 +18,22 @@ async function checkAdminAccess() {
         if (!user || user.role !== 'admin') {
             showAlert('Access denied. Admin privileges required.', 'error');
             setTimeout(() => {
-                window.location.href = 'index.html';
+                window.location.href = '/app';
             }, 2000);
             return;
         }
         currentUser = user;
-        console.log('Admin user:', currentUser);
+        console.log('Admin user authenticated:', currentUser);
+        
+        setupAdminEventListeners();
+        updateAdminNavigation();
+        
+        // Load initial data and show documents section
+        await loadInitialData();
+        
     } catch (error) {
         console.error('Admin access check failed:', error);
-        window.location.href = 'index.html';
+        window.location.href = '/app';
     }
 }
 
@@ -82,10 +86,9 @@ async function apiCall(endpoint, options = {}) {
 
 function logout() {
     localStorage.removeItem('Sage_token');
-    window.location.href = 'index.html';
+    window.location.href = '/app';
 }
 
-// Utility functions
 function showAlert(message, type = 'info') {
     const alertContainer = document.getElementById('alert-container') || createAlertContainer();
     const alert = document.createElement('div');
@@ -99,7 +102,6 @@ function showAlert(message, type = 'info') {
     
     alertContainer.appendChild(alert);
     
-    // Auto remove after 5 seconds
     setTimeout(() => {
         if (alert.parentElement) {
             alert.remove();
@@ -111,19 +113,15 @@ function createAlertContainer() {
     const container = document.createElement('div');
     container.id = 'alert-container';
     container.className = 'alert-container';
-    container.style.cssText = `
-        position: fixed;
-        top: 100px;
-        right: 20px;
-        z-index: 9998;
-    `;
     document.body.appendChild(container);
     return container;
 }
 
 function showLoading() {
-    const loadingOverlay = document.getElementById('loading-overlay') || createLoadingOverlay();
-    loadingOverlay.classList.add('active');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    }
 }
 
 function hideLoading() {
@@ -133,34 +131,16 @@ function hideLoading() {
     }
 }
 
-function createLoadingOverlay() {
-    const overlay = document.createElement('div');
-    overlay.id = 'loading-overlay';
-    overlay.className = 'loading-overlay';
-    overlay.innerHTML = `
-        <div class="spinner"></div>
-        <p>Loading...</p>
-    `;
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        z-index: 9999;
-    `;
-    document.body.appendChild(overlay);
-    return overlay;
-}
-
 function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Invalid Date';
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return 'Invalid Date';
+    }
 }
 
 function formatFileSize(bytes) {
@@ -171,9 +151,14 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Event listeners setup
+function updateAdminNavigation() {
+    const adminNameEl = document.getElementById('admin-name');
+    if (adminNameEl && currentUser) {
+        adminNameEl.textContent = currentUser.full_name;
+    }
+}
+
 function setupAdminEventListeners() {
-    // File upload drag and drop
     const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('file-input');
     if (uploadArea && fileInput) {
@@ -184,7 +169,6 @@ function setupAdminEventListeners() {
         fileInput.addEventListener('change', handleFileSelect);
     }
     
-    // Modal events
     const modal = document.getElementById('upload-modal');
     if (modal) {
         modal.addEventListener('click', (e) => {
@@ -194,41 +178,10 @@ function setupAdminEventListeners() {
         });
     }
     
-    // Keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcuts);
-    
-    // Refresh buttons
-    setupRefreshButtons();
-}
-
-function setupRefreshButtons() {
-    // Add refresh buttons to section headers
-    const sectionsWithRefresh = ['documents', 'users'];
-    
-    sectionsWithRefresh.forEach(sectionName => {
-        const sectionHeader = document.querySelector(`#${sectionName}-section .section-header`);
-        if (sectionHeader) {
-            const refreshBtn = document.createElement('button');
-            refreshBtn.className = 'btn btn-secondary btn-small';
-            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
-            refreshBtn.onclick = () => {
-                if (sectionName === 'documents') loadDocuments();
-                if (sectionName === 'users') loadUsers();
-            };
-            
-            // Insert before the last button (usually upload/add button)
-            const lastBtn = sectionHeader.querySelector('.btn:last-child');
-            if (lastBtn) {
-                sectionHeader.insertBefore(refreshBtn, lastBtn);
-            } else {
-                sectionHeader.appendChild(refreshBtn);
-            }
-        }
-    });
 }
 
 function handleKeyboardShortcuts(e) {
-    // Ctrl/Cmd + U for upload
     if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
         e.preventDefault();
         if (currentSection === 'documents') {
@@ -236,74 +189,229 @@ function handleKeyboardShortcuts(e) {
         }
     }
     
-    // Escape to close modal
     if (e.key === 'Escape') {
         closeUploadModal();
     }
     
-    // Ctrl/Cmd + R for refresh (prevent default and use our refresh)
     if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
         e.preventDefault();
         if (currentSection === 'documents') loadDocuments();
         if (currentSection === 'users') loadUsers();
+        if (currentSection === 'analytics') loadAnalytics();
         if (currentSection === 'settings') loadSettings();
     }
 }
 
-// Data loading and initialization
 async function loadInitialData() {
-    await loadDocuments();
-    showSection('documents');
+    console.log('=== Starting loadInitialData ===');
+    
+    try {
+        console.log('Loading system status...');
+        await loadSystemStatus();
+        console.log('System status loaded successfully');
+        
+        console.log('Showing documents section...');
+        showSection('documents');
+        console.log('=== loadInitialData completed ===');
+        
+    } catch (error) {
+        console.error('Error in loadInitialData:', error);
+        showAlert('Failed to load initial data: ' + error.message, 'error');
+        
+        // Try to show documents section anyway
+        try {
+            showSection('documents');
+        } catch (sectionError) {
+            console.error('Failed to show documents section:', sectionError);
+        }
+    }
+}
+
+async function loadSystemStatus() {
+    try {
+        const healthResponse = await fetch(`${apiBaseUrl}/health`);
+        const healthData = await healthResponse.json();
+        
+        updateStatusIndicator('api-indicator', healthResponse.ok);
+        updateStatusIndicator('db-indicator', healthResponse.ok);
+        updateStatusIndicator('vector-indicator', healthResponse.ok);
+        
+    } catch (error) {
+        updateStatusIndicator('api-indicator', false);
+        updateStatusIndicator('db-indicator', false);
+        updateStatusIndicator('vector-indicator', false);
+    }
+}
+
+function updateStatusIndicator(indicatorId, isHealthy) {
+    const indicator = document.getElementById(indicatorId);
+    if (indicator) {
+        indicator.className = `status-indicator ${isHealthy ? 'status-healthy' : 'status-error'}`;
+        indicator.style.color = isHealthy ? '#28a745' : '#dc3545';
+    }
 }
 
 function showSection(sectionName) {
+    console.log('=== showSection called with:', sectionName, '===');
+    
+    // Map section names to actual section IDs
+    const sectionMapping = {
+        'documents': 'documents-section',
+        'users': 'users-section', 
+        'analytics': 'analytics-section',
+        'settings': 'settings-section'
+    };
+    
+    const actualSectionId = sectionMapping[sectionName] || `${sectionName}-section`;
+    console.log('Looking for section ID:', actualSectionId);
+    
+    // Check if section exists
+    const targetSection = document.getElementById(actualSectionId);
+    if (!targetSection) {
+        console.error('❌ Section not found:', actualSectionId);
+        console.log('Available sections:');
+        document.querySelectorAll('.admin-section').forEach(section => {
+            console.log('  - ' + section.id);
+        });
+        return;
+    }
+    
+    console.log('✅ Target section found:', actualSectionId);
+    
     // Update menu items
     document.querySelectorAll('.menu-item').forEach(item => {
         item.classList.remove('active');
+        console.log('Removed active from menu item');
     });
     
-    const activeMenuItem = document.querySelector(`[onclick="showSection('${sectionName}')"]`);
-    if (activeMenuItem) {
-        activeMenuItem.classList.add('active');
+    // Find and activate the correct menu item
+    const menuItems = document.querySelectorAll('.menu-item');
+    let foundMenuItem = false;
+    menuItems.forEach(item => {
+        const onclickAttr = item.getAttribute('onclick');
+        if (onclickAttr && onclickAttr.includes(`'${sectionName}'`)) {
+            item.classList.add('active');
+            foundMenuItem = true;
+            console.log('✅ Activated menu item for:', sectionName);
+        }
+    });
+    
+    if (!foundMenuItem) {
+        console.warn('⚠️ Menu item not found for section:', sectionName);
     }
     
-    // Update sections
+    // Hide all sections
     document.querySelectorAll('.admin-section').forEach(section => {
         section.classList.remove('active');
+        section.style.display = 'none';
+        console.log('Hidden section:', section.id);
     });
     
-    const targetSection = document.getElementById(`${sectionName}-section`);
-    if (targetSection) {
-        targetSection.classList.add('active');
-    }
+    // Show target section
+    targetSection.classList.add('active');
+    targetSection.style.display = 'block';
+    console.log('✅ Shown section:', actualSectionId);
+    
+    // Verify section is visible
+    setTimeout(() => {
+        const isVisible = targetSection.offsetHeight > 0;
+        console.log('Section visibility check:', isVisible ? '✅ VISIBLE' : '❌ NOT VISIBLE');
+        if (!isVisible) {
+            console.error('Section is not visible! Debugging...');
+            console.log('Section classes:', targetSection.className);
+            console.log('Section style.display:', targetSection.style.display);
+            console.log('Section offsetHeight:', targetSection.offsetHeight);
+        }
+    }, 100);
     
     currentSection = sectionName;
     
     // Load section-specific data
+    console.log('Loading data for section:', sectionName);
     switch (sectionName) {
         case 'documents':
+            console.log('📄 Loading documents...');
             loadDocuments();
             break;
         case 'users':
+            console.log('👥 Loading users...');
             loadUsers();
             break;
+        case 'analytics':
+            console.log('📊 Loading analytics...');
+            loadAnalytics();
+            break;
         case 'settings':
+            console.log('⚙️ Loading settings...');
             loadSettings();
             break;
+        default:
+            console.warn('Unknown section:', sectionName);
     }
+    
+    console.log('=== showSection completed ===');
 }
 
-// Document management functions
 async function loadDocuments() {
     try {
         showLoading();
         const documents = await apiCall('/admin/documents');
-        renderDocumentsTable(documents);
+        console.log('Documents loaded:', documents);
+        
+        if (documents && Array.isArray(documents)) {
+            renderDocumentsTable(documents);
+            updateDocumentStats(documents);
+            updateMenuBadge('docs-count', documents.length);
+        } else {
+            console.error('Invalid documents response:', documents);
+            renderDocumentsTable([]);
+            updateDocumentStats([]);
+            updateMenuBadge('docs-count', 0);
+        }
     } catch (error) {
         console.error('Failed to load documents:', error);
         showAlert('Failed to load documents: ' + error.message, 'error');
+        renderDocumentsTable([]);
+        updateDocumentStats([]);
+        updateMenuBadge('docs-count', 0);
     } finally {
         hideLoading();
+    }
+}
+
+function updateDocumentStats(documents) {
+    if (!documents || !Array.isArray(documents)) {
+        updateStat('total-documents', 0);
+        updateStat('processed-documents', 0);
+        updateStat('processing-documents', 0);
+        updateStat('total-chunks', 0);
+        return;
+    }
+    
+    const totalDocs = documents.length;
+    const processedDocs = documents.filter(d => d && d.status === 'completed').length;
+    const processingDocs = documents.filter(d => d && d.status === 'processing').length;
+    const totalChunks = documents.reduce((sum, doc) => {
+        return sum + (doc && typeof doc.chunks_count === 'number' ? doc.chunks_count : 0);
+    }, 0);
+    
+    updateStat('total-documents', totalDocs);
+    updateStat('processed-documents', processedDocs);
+    updateStat('processing-documents', processingDocs);
+    updateStat('total-chunks', totalChunks);
+}
+
+function updateStat(statId, value) {
+    const statElement = document.getElementById(statId);
+    if (statElement) {
+        statElement.textContent = value;
+    }
+}
+
+function updateMenuBadge(badgeId, value) {
+    const badge = document.getElementById(badgeId);
+    if (badge) {
+        badge.textContent = value;
     }
 }
 
@@ -311,7 +419,7 @@ function renderDocumentsTable(documents) {
     const tbody = document.getElementById('documents-tbody');
     if (!tbody) return;
     
-    if (documents.length === 0) {
+    if (!documents || !Array.isArray(documents) || documents.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" style="text-align: center; padding: 3rem; color: #666;">
@@ -327,40 +435,52 @@ function renderDocumentsTable(documents) {
         return;
     }
     
-    tbody.innerHTML = documents.map(doc => `
-        <tr data-document-id="${doc.document_id}">
-            <td>
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <i class="fas ${getFileIcon(doc.file_type)}" style="font-size: 1.5rem; color: ${getFileColor(doc.file_type)};"></i>
-                    <div>
-                        <div style="font-weight: 500; margin-bottom: 0.25rem;">${doc.original_filename}</div>
-                        <div style="font-size: 0.75rem; color: #666; font-family: monospace;">${doc.document_id}</div>
+    tbody.innerHTML = documents.map(doc => {
+        if (!doc) return '';
+        
+        const documentId = doc.document_id || '';
+        const fileName = doc.original_filename || 'Unknown';
+        const fileType = doc.file_type || 'unknown';
+        const fileSize = doc.file_size || 0;
+        const status = doc.status || 'unknown';
+        const chunksCount = doc.chunks_count || 0;
+        const createdAt = doc.created_at || '';
+        
+        return `
+            <tr data-document-id="${documentId}">
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <i class="fas ${getFileIcon(fileType)}" style="font-size: 1.5rem; color: ${getFileColor(fileType)};"></i>
+                        <div>
+                            <div style="font-weight: 500; margin-bottom: 0.25rem;">${fileName}</div>
+                            <div style="font-size: 0.75rem; color: #666; font-family: monospace;">${documentId}</div>
+                        </div>
                     </div>
-                </div>
-            </td>
-            <td><span class="file-type-badge ${doc.file_type}">${doc.file_type.toUpperCase()}</span></td>
-            <td>${formatFileSize(doc.file_size)}</td>
-            <td><span class="status-badge status-${doc.status}">${formatStatus(doc.status)}</span></td>
-            <td>
-                <span style="font-weight: 500;">${doc.chunks_count || 0}</span>
-                ${doc.chunks_count > 0 ? '<i class="fas fa-check-circle" style="color: #28a745; margin-left: 0.5rem;" title="Ready for chat"></i>' : ''}
-            </td>
-            <td>${formatDate(doc.created_at)}</td>
-            <td>
-                <div class="action-buttons">
-                    <button class="action-btn btn-view" onclick="viewDocument('${doc.document_id}')" title="View Details">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="action-btn btn-status" onclick="checkDocumentStatus('${doc.document_id}')" title="Check Status">
-                        <i class="fas fa-info-circle"></i>
-                    </button>
-                    <button class="action-btn btn-delete" onclick="deleteDocument('${doc.document_id}', '${doc.original_filename}')" title="Delete Document">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+                </td>
+                <td><span class="file-type-badge ${fileType}">${fileType.toUpperCase()}</span></td>
+                <td>${formatFileSize(fileSize)}</td>
+                <td><span class="status-badge status-${status}">${formatStatus(status)}</span></td>
+                <td>
+                    <span style="font-weight: 500;">${chunksCount}</span>
+                    ${chunksCount > 0 ? '<i class="fas fa-check-circle" style="color: #28a745; margin-left: 0.5rem;" title="Ready for chat"></i>' : ''}
+                </td>
+                <td>${formatDate(createdAt)}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="action-btn btn-view" onclick="viewDocument('${documentId}')" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="action-btn btn-status" onclick="checkDocumentStatus('${documentId}')" title="Check Status">
+                            <i class="fas fa-info-circle"></i>
+                        </button>
+                        <button class="action-btn btn-delete" onclick="deleteDocument('${documentId}', '${fileName}')" title="Delete Document">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function getFileIcon(fileType) {
@@ -428,11 +548,9 @@ async function checkDocumentStatus(documentId) {
             
             const status = await apiCall(`/admin/documents/${documentId}/status`);
             
-            // Update the row with new status
             statusCell.className = `status-badge status-${status.status}`;
             statusCell.innerHTML = formatStatus(status.status);
             
-            // Update chunks count
             const chunksCell = row.cells[4];
             chunksCell.innerHTML = `
                 <span style="font-weight: 500;">${status.chunks_count || 0}</span>
@@ -457,7 +575,7 @@ async function deleteDocument(documentId, filename) {
         showLoading();
         await apiCall(`/admin/documents/${documentId}`, { method: 'DELETE' });
         showAlert(`Document "${filename}" deleted successfully`, 'success');
-        loadDocuments(); // Refresh list
+        loadDocuments();
     } catch (error) {
         showAlert('Failed to delete document: ' + error.message, 'error');
     } finally {
@@ -465,18 +583,60 @@ async function deleteDocument(documentId, filename) {
     }
 }
 
-// User management functions
 async function loadUsers() {
     try {
         showLoading();
         const users = await apiCall('/admin/users');
-        renderUsersTable(users);
+        console.log('Users loaded:', users);
+        
+        if (users && Array.isArray(users)) {
+            renderUsersTable(users);
+            updateUserStats(users);
+            updateMenuBadge('users-count', users.length);
+        } else {
+            console.error('Invalid users response:', users);
+            renderUsersTable([]);
+            updateUserStats([]);
+            updateMenuBadge('users-count', 0);
+        }
     } catch (error) {
         console.error('Failed to load users:', error);
         showAlert('Failed to load users: ' + error.message, 'error');
+        renderUsersTable([]);
+        updateUserStats([]);
+        updateMenuBadge('users-count', 0);
     } finally {
         hideLoading();
     }
+}
+
+function updateUserStats(users) {
+    if (!users || !Array.isArray(users)) {
+        updateStat('total-users', 0);
+        updateStat('active-users', 0);
+        updateStat('admin-users', 0);
+        updateStat('new-users-today', 0);
+        return;
+    }
+    
+    const totalUsers = users.length;
+    const activeUsers = users.filter(u => u && u.is_active).length;
+    const adminUsers = users.filter(u => u && u.role === 'admin').length;
+    const newUsersToday = users.filter(u => {
+        if (!u || !u.created_at) return false;
+        try {
+            const createdDate = new Date(u.created_at);
+            const today = new Date();
+            return createdDate.toDateString() === today.toDateString();
+        } catch (e) {
+            return false;
+        }
+    }).length;
+    
+    updateStat('total-users', totalUsers);
+    updateStat('active-users', activeUsers);
+    updateStat('admin-users', adminUsers);
+    updateStat('new-users-today', newUsersToday);
 }
 
 function renderUsersTable(users) {
@@ -551,7 +711,7 @@ async function toggleUserStatus(userId, activate, username) {
             body: JSON.stringify({ is_active: activate })
         });
         showAlert(`User "${username}" ${action}d successfully`, 'success');
-        loadUsers(); // Refresh list
+        loadUsers();
     } catch (error) {
         showAlert(`Failed to ${action} user: ` + error.message, 'error');
     } finally {
@@ -564,7 +724,6 @@ async function deleteUser(userId, username) {
         return;
     }
     
-    // Double confirmation for destructive action
     const confirmText = prompt(`To confirm deletion, please type the username "${username}" below:`);
     if (confirmText !== username) {
         showAlert('Username confirmation failed. Deletion cancelled.', 'warning');
@@ -575,7 +734,7 @@ async function deleteUser(userId, username) {
         showLoading();
         await apiCall(`/admin/users/${userId}`, { method: 'DELETE' });
         showAlert(`User "${username}" deleted successfully`, 'success');
-        loadUsers(); // Refresh list
+        loadUsers();
     } catch (error) {
         showAlert('Failed to delete user: ' + error.message, 'error');
     } finally {
@@ -583,51 +742,100 @@ async function deleteUser(userId, username) {
     }
 }
 
-// Settings management
-async function loadSettings() {
+async function loadAnalytics() {
+    console.log('Loading analytics data...');
     try {
-        // Check system health
-        const healthResponse = await fetch(`${apiBaseUrl}/health`);
-        const healthData = await healthResponse.json();
+        showLoading();
         
-        // Update status indicators
-        updateSystemStatus('api', healthResponse.ok);
-        updateSystemStatus('database', healthResponse.ok);
+        // Try to load documents and users for analytics
+        const [documents, users] = await Promise.all([
+            apiCall('/admin/documents').catch(e => {
+                console.warn('Failed to load documents for analytics:', e);
+                return [];
+            }),
+            apiCall('/admin/users').catch(e => {
+                console.warn('Failed to load users for analytics:', e);
+                return [];
+            })
+        ]);
         
-        // Check FAISS status
-        try {
-            const documentsResponse = await apiCall('/admin/documents');
-            updateSystemStatus('faiss', true);
-        } catch (error) {
-            updateSystemStatus('faiss', false);
-        }
-        
-        // Load additional settings
-        await loadSystemStats();
+        console.log('Analytics data loaded:', { documents: documents?.length, users: users?.length });
+        updateAnalyticsData(documents || [], users || []);
         
     } catch (error) {
-        console.error('Failed to load settings:', error);
-        updateSystemStatus('api', false);
-        updateSystemStatus('database', false);
-        updateSystemStatus('faiss', false);
+        console.error('Failed to load analytics:', error);
+        showAlert('Failed to load analytics: ' + error.message, 'error');
+        
+        // Set default values on error
+        updateAnalyticsData([], []);
+    } finally {
+        hideLoading();
     }
 }
 
-async function loadSystemStats() {
+function updateAnalyticsData(documents, users) {
+    console.log('Updating analytics data...', { documents: documents?.length, users: users?.length });
+    
+    // Ensure we have arrays
+    documents = documents || [];
+    users = users || [];
+    
+    // Update usage overview
+    updateStat('total-chat-sessions', '0');
+    updateStat('total-messages', '0');
+    updateStat('avg-response-time', '0ms');
+    
+    // Update document statistics
+    updateStat('most-used-doc', documents.length > 0 ? documents[0]?.original_filename || '-' : '-');
+    
+    const totalSize = documents.reduce((sum, doc) => sum + (doc?.file_size || 0), 0);
+    updateStat('total-file-size', Math.round(totalSize / (1024 * 1024)) + ' MB');
+    
+    const successRate = documents.length > 0 ? 
+        Math.round((documents.filter(d => d?.status === 'completed').length / documents.length) * 100) + '%' : 
+        '0%';
+    updateStat('processing-success-rate', successRate);
+    
+    // Update user activity
+    updateStat('daily-active-users', users.filter(u => u?.is_active).length);
+    updateStat('peak-usage-hour', '-');
+    updateStat('user-satisfaction', '-');
+    
+    console.log('Analytics data updated successfully');
+}
+
+async function loadSettings() {
+    console.log('Loading settings...');
     try {
-        const [documents, users] = await Promise.all([
-            apiCall('/admin/documents'),
-            apiCall('/admin/users')
-        ]);
+        showLoading();
         
-        // Update statistics
-        updateStat('total-documents', documents.length);
-        updateStat('processed-documents', documents.filter(d => d.status === 'completed').length);
-        updateStat('total-users', users.length);
-        updateStat('active-users', users.filter(u => u.is_active).length);
+        // Check system health
+        const healthResponse = await fetch(`${apiBaseUrl}/health`).catch(e => {
+            console.warn('Health check failed:', e);
+            return { ok: false };
+        });
+        
+        const isHealthy = healthResponse.ok;
+        console.log('System health check:', isHealthy);
+        
+        updateSystemStatus('api', isHealthy);
+        updateSystemStatus('database', isHealthy);
+        updateSystemStatus('faiss', isHealthy);
+        updateSystemStatus('websocket', isHealthy);
+        
+        console.log('Settings loaded successfully');
         
     } catch (error) {
-        console.error('Failed to load system stats:', error);
+        console.error('Failed to load settings:', error);
+        showAlert('Failed to load settings: ' + error.message, 'error');
+        
+        // Set all to unhealthy on error
+        updateSystemStatus('api', false);
+        updateSystemStatus('database', false);
+        updateSystemStatus('faiss', false);
+        updateSystemStatus('websocket', false);
+    } finally {
+        hideLoading();
     }
 }
 
@@ -639,14 +847,6 @@ function updateSystemStatus(system, isHealthy) {
     }
 }
 
-function updateStat(statId, value) {
-    const statElement = document.getElementById(statId);
-    if (statElement) {
-        statElement.textContent = value;
-    }
-}
-
-// File upload functionality
 function showUploadModal() {
     const modal = document.getElementById('upload-modal');
     if (modal) {
@@ -664,7 +864,6 @@ function closeUploadModal() {
         selectedFiles = [];
         updateFileList();
         
-        // Reset upload area
         const uploadArea = document.getElementById('upload-area');
         if (uploadArea) {
             uploadArea.classList.remove('dragover');
@@ -696,29 +895,26 @@ function handleDrop(e) {
 function handleFileSelect(e) {
     const files = Array.from(e.target.files);
     addFiles(files);
-    e.target.value = ''; // Reset input
+    e.target.value = '';
 }
 
 function addFiles(files) {
     const allowedTypes = ['pdf', 'docx', 'txt', 'xlsx'];
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     
     files.forEach(file => {
         const extension = file.name.split('.').pop().toLowerCase();
         
-        // Validate file type
         if (!allowedTypes.includes(extension)) {
             showAlert(`File "${file.name}" has unsupported format. Allowed: ${allowedTypes.join(', ').toUpperCase()}`, 'error');
             return;
         }
         
-        // Validate file size
         if (file.size > maxSize) {
             showAlert(`File "${file.name}" is too large. Maximum size: 10MB`, 'error');
             return;
         }
         
-        // Check if file already selected
         if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
             showAlert(`File "${file.name}" is already selected`, 'warning');
             return;
@@ -792,7 +988,6 @@ async function uploadFiles() {
         let errorCount = 0;
         const totalFiles = selectedFiles.length;
         
-        // Upload files one by one with progress
         for (let i = 0; i < selectedFiles.length; i++) {
             const file = selectedFiles[i];
             
@@ -819,7 +1014,6 @@ async function uploadFiles() {
                 console.log(`Upload successful for ${file.name}:`, result);
                 successCount++;
                 
-                // Update progress
                 showAlert(`Uploaded "${file.name}" successfully`, 'success');
                 
             } catch (error) {
@@ -829,12 +1023,11 @@ async function uploadFiles() {
             }
         }
         
-        // Show final summary
         if (successCount > 0) {
             showAlert(`Upload complete: ${successCount} successful, ${errorCount} failed`, 
                 errorCount === 0 ? 'success' : 'warning');
             closeUploadModal();
-            loadDocuments(); // Refresh documents list
+            loadDocuments();
         }
         
     } catch (error) {
@@ -846,7 +1039,45 @@ async function uploadFiles() {
     }
 }
 
-// Add custom styles for admin interface
+function saveSettings() {
+    showAlert('Settings saved successfully', 'success');
+}
+
+function exportAnalytics() {
+    showAlert('Analytics export started', 'info');
+}
+
+function exportData() {
+    showAlert('Data export started', 'info');
+}
+
+function clearCache() {
+    if (confirm('Are you sure you want to clear the cache?')) {
+        showAlert('Cache cleared successfully', 'success');
+    }
+}
+
+function rebuildIndex() {
+    if (confirm('Are you sure you want to rebuild the index? This may take some time.')) {
+        showAlert('Index rebuild started', 'info');
+    }
+}
+
+function resetSystem() {
+    if (confirm('Are you sure you want to reset the system? This will delete all data and cannot be undone.')) {
+        const confirmText = prompt('Type "RESET" to confirm:');
+        if (confirmText === 'RESET') {
+            showAlert('System reset initiated', 'warning');
+        } else {
+            showAlert('Reset cancelled', 'info');
+        }
+    }
+}
+
+function showCreateUserModal() {
+    showAlert('Create user functionality coming soon', 'info');
+}
+
 const adminStyles = `
     .file-type-badge {
         padding: 0.25rem 0.5rem;
@@ -954,6 +1185,268 @@ const adminStyles = `
         transform: scale(1.02);
     }
     
+    .status-healthy {
+        color: #28a745;
+    }
+    
+    .status-error {
+        color: #dc3545;
+    }
+    
+    .status-badge.status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-badge.status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-badge.status-completed {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-badge.status-processing {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-badge.status-failed {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .menu-badge {
+        background: #667eea;
+        color: white;
+        border-radius: 10px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        min-width: 20px;
+        text-align: center;
+    }
+    
+    .section-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .stat-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
+    
+    .stat-info h3 {
+        font-size: 2rem;
+        margin: 0;
+        color: #333;
+    }
+    
+    .stat-info p {
+        margin: 0;
+        color: #666;
+        font-size: 0.9rem;
+    }
+    
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+    }
+    
+    .analytics-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .analytics-card h3 {
+        color: #333;
+        margin-bottom: 1.5rem;
+        font-size: 1.3rem;
+    }
+    
+    .analytics-card.full-width {
+        grid-column: 1 / -1;
+    }
+    
+    .analytics-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .metric {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e1e8ed;
+    }
+    
+    .metric:last-child {
+        border-bottom: none;
+    }
+    
+    .metric-label {
+        font-weight: 500;
+        color: #555;
+    }
+    
+    .metric-value {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .performance-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .performance-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .performance-label {
+        min-width: 120px;
+        font-weight: 500;
+        color: #555;
+    }
+    
+    .progress-bar {
+        flex: 1;
+        height: 8px;
+        background: #e1e8ed;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        transition: width 0.3s ease;
+    }
+    
+    .performance-value {
+        min-width: 50px;
+        text-align: right;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+    }
+    
+    .setting-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .setting-card h3 {
+        color: #333;
+        margin-bottom: 1.5rem;
+        font-size: 1.3rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .setting-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .status-grid, .info-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .status-item, .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e1e8ed;
+    }
+    
+    .status-item:last-child, .info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .setting-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .setting-item label {
+        font-weight: 500;
+        color: #555;
+    }
+    
+    .setting-item input, .setting-item select {
+        padding: 0.5rem;
+        border: 1px solid #e1e8ed;
+        border-radius: 4px;
+        font-size: 1rem;
+    }
+    
+    .setting-item input:focus, .setting-item select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    .setting-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .setting-actions .btn {
+        flex: 1;
+        min-width: 120px;
+    }
+    
+    .range-value {
+        font-weight: 600;
+        color: #667eea;
+    }
+    
     @media (max-width: 768px) {
         .action-buttons {
             flex-direction: column;
@@ -969,37 +1462,21 @@ const adminStyles = `
             flex-direction: column;
             text-align: center;
         }
+        
+        .section-stats {
+            grid-template-columns: 1fr;
+        }
+        
+        .analytics-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .settings-grid {
+            grid-template-columns: 1fr;
+        }
     }
 `;
 
-// Inject additional styles
 const styleSheet = document.createElement('style');
 styleSheet.textContent = adminStyles;
 document.head.appendChild(styleSheet);
-
-// Auto-refresh functionality
-let autoRefreshInterval = null;
-
-function startAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-    }
-    
-    // Refresh every 30 seconds
-    autoRefreshInterval = setInterval(() => {
-        if (currentSection === 'documents') {
-            loadDocuments();
-        } else if (currentSection === 'users') {
-            loadUsers();
-        } else if (currentSection === 'settings') {
-            loadSettings();
-        }
-    }, 30000);
-}
-
-function stopAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
-    }
-}

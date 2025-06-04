@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sage Admin Panel</title>
-    <link rel="stylesheet" href="../static/css/main.css">
-    <link rel="stylesheet" href="../static/css/admin.css">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM2NjdlZWEiLz4KPHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHg9IjYiIHk9IjYiIGZpbGw9IndoaXRlIj4KPHA+UjwvcD4KPC9zdmc+Cjwvc3ZnPg==">
 </head>
 <body>
-    <!-- Navigation Bar -->
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-brand">
@@ -18,10 +17,10 @@
                 <span>Sage Admin</span>
             </div>
             <div class="nav-menu">
-                <a href="index.html" class="nav-link" title="Back to Dashboard">
+                <a href="/app" class="nav-link" title="Back to Dashboard">
                     <i class="fas fa-home"></i> Dashboard
                 </a>
-                <a href="chat.html" class="nav-link" title="Chat Interface">
+                <a href="/chat" class="nav-link" title="Chat Interface">
                     <i class="fas fa-comments"></i> Chat
                 </a>
                 <div class="nav-user">
@@ -38,7 +37,6 @@
     </nav>
 
     <main class="admin-main">
-        <!-- Sidebar Navigation -->
         <div class="admin-sidebar">
             <div class="sidebar-header">
                 <h3>Admin Panel</h3>
@@ -91,9 +89,7 @@
             </div>
         </div>
 
-        <!-- Main Content Area -->
         <div class="admin-content">
-            <!-- Documents Section -->
             <section id="documents-section" class="admin-section active">
                 <div class="section-header">
                     <div class="section-title">
@@ -164,14 +160,12 @@
                                 </tr>
                             </thead>
                             <tbody id="documents-tbody">
-                                <!-- Documents will be loaded here -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </section>
 
-            <!-- Users Section -->
             <section id="users-section" class="admin-section">
                 <div class="section-header">
                     <div class="section-title">
@@ -242,14 +236,12 @@
                                 </tr>
                             </thead>
                             <tbody id="users-tbody">
-                                <!-- Users will be loaded here -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </section>
 
-            <!-- Analytics Section -->
             <section id="analytics-section" class="admin-section">
                 <div class="section-header">
                     <div class="section-title">
@@ -352,7 +344,6 @@
                 </div>
             </section>
 
-            <!-- Settings Section -->
             <section id="settings-section" class="admin-section">
                 <div class="section-header">
                     <div class="section-title">
@@ -422,9 +413,9 @@
                             <div class="setting-item">
                                 <label for="ai-model">AI Model</label>
                                 <select id="ai-model">
-                                    <option value="gpt-4o">GPT-4o</option>
-                                    <option value="gpt-4">GPT-4</option>
-                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                    <option value="gemma3:12b">Gemma 3:12b</option>
+                                    <option value="llama2">Llama 2</option>
+                                    <option value="mistral">Mistral</option>
                                 </select>
                             </div>
                             <div class="setting-item">
@@ -497,7 +488,7 @@
                             <div class="info-grid">
                                 <div class="info-item">
                                     <span>Sage Version</span>
-                                    <span>1.0.0</span>
+                                    <span>2.0.0</span>
                                 </div>
                                 <div class="info-item">
                                     <span>API Version</span>
@@ -527,7 +518,6 @@
         </div>
     </main>
 
-    <!-- Upload Modal -->
     <div id="upload-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -546,7 +536,6 @@
                     </div>
                     
                     <div id="file-list" class="file-list">
-                        <!-- Selected files will appear here -->
                     </div>
                     
                     <div class="upload-tips">
@@ -571,7 +560,6 @@
         </div>
     </div>
 
-    <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay">
         <div class="loading-content">
             <div class="spinner"></div>
@@ -580,17 +568,15 @@
         </div>
     </div>
 
-    <!-- Alert Container -->
     <div id="alert-container" class="alert-container"></div>
 
-    <!-- Scripts -->
-    <script src="../static/js/main.js"></script>
-    <script src="../static/js/admin.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/admin.js"></script>
     
     <script>
-        // Initialize admin panel
         document.addEventListener('DOMContentLoaded', function() {
-            // Update temperature slider display
+            console.log('Admin panel DOM loaded');
+            
             const tempSlider = document.getElementById('temperature');
             const tempValue = document.querySelector('#temperature + .range-value');
             
@@ -599,15 +585,41 @@
                     tempValue.textContent = this.value;
                 });
             }
-            
-            // Set current user name if available
-            if (currentUser && currentUser.full_name) {
-                const adminNameEl = document.getElementById('admin-name');
-                if (adminNameEl) {
-                    adminNameEl.textContent = currentUser.full_name;
-                }
-            }
         });
+        
+        window.addEventListener('load', function() {
+            console.log('Admin panel fully loaded');
+            
+            // Ensure the documents section is visible by default
+            setTimeout(() => {
+                console.log('Checking section visibility...');
+                const documentsSection = document.getElementById('documents-section');
+                if (documentsSection && !documentsSection.classList.contains('active')) {
+                    console.log('Forcing documents section to show...');
+                    showSection('documents');
+                }
+            }, 1000);
+        });
+        
+        // Add global error handler
+        window.addEventListener('error', function(e) {
+            console.error('Admin panel error:', e.error);
+        });
+        
+        // Debug function
+        window.debugAdmin = function() {
+            console.log('=== Admin Panel Debug ===');
+            console.log('Current section:', currentSection);
+            console.log('Current user:', currentUser);
+            
+            document.querySelectorAll('.admin-section').forEach(section => {
+                console.log(`Section ${section.id}:`, {
+                    hasActive: section.classList.contains('active'),
+                    display: section.style.display,
+                    visible: section.offsetHeight > 0
+                });
+            });
+        };
     </script>
 </body>
 </html>

@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     # Ollama settings
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     
-    # Model settings for Gemma 3:12b
-    MODEL_NAME: str = "gemma3:12b"
+    # Model settings for gemma3:12b
+    MODEL_NAME: str = "qwen2.5:7b"
     TEMPERATURE: float = 0.0
     TOP_P: float = 0.95
     REPETITION_PENALTY: float = 1.15

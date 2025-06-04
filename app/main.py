@@ -125,13 +125,27 @@ def root():
 @app.get("/health")
 def health_check():
     from app.database import get_pool_status
-    import psutil
+    import time
     
     try:
         db_healthy = check_db_connection()
         
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        memory = psutil.virtual_memory()
+        try:
+            import psutil
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            system_info = {
+                "cpu_usage_percent": cpu_percent,
+                "memory_usage_percent": memory.percent,
+                "available_memory_gb": round(memory.available / (1024**3), 2)
+            }
+        except ImportError:
+            system_info = {
+                "cpu_usage_percent": 0,
+                "memory_usage_percent": 0,
+                "available_memory_gb": 0,
+                "note": "psutil not available"
+            }
         
         pool_status = get_pool_status()
         
@@ -139,16 +153,12 @@ def health_check():
         
         return {
             "status": health_status,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": time.time(),
             "database": {
                 "connected": db_healthy,
                 "pool": pool_status
             },
-            "system": {
-                "cpu_usage_percent": cpu_percent,
-                "memory_usage_percent": memory.percent,
-                "available_memory_gb": round(memory.available / (1024**3), 2)
-            },
+            "system": system_info,
             "services": {
                 "document_processor": "running" if _startup_complete else "starting",
                 "websocket_heartbeat": "running" if _startup_complete else "starting"
@@ -158,7 +168,7 @@ def health_check():
         return {
             "status": "error",
             "error": str(e),
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": time.time()
         }
 
 @app.get("/app")
