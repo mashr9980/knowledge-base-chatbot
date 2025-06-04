@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sage Admin Panel</title>
+    <link rel="stylesheet" href="../static/css/main.css">
+    <link rel="stylesheet" href="../static/css/admin.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM2NjdlZWEiLz4KPHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHg9IjYiIHk9IjYiIGZpbGw9IndoaXRlIj4KPHA+UjwvcD4KPC9zdmc+Cjwvc3ZnPg==">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-robot"></i>
+                <span>Sage Admin</span>
+            </div>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link" title="Back to Dashboard">
+                    <i class="fas fa-home"></i> Dashboard
+                </a>
+                <a href="chat.html" class="nav-link" title="Chat Interface">
+                    <i class="fas fa-comments"></i> Chat
+                </a>
+                <div class="nav-user">
+                    <div class="user-info">
+                        <span class="user-name" id="admin-name">Admin</span>
+                        <span class="user-role">Administrator</span>
+                    </div>
+                    <button class="btn btn-outline btn-small" onclick="logout()" title="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="admin-main">
+        <!-- Sidebar Navigation -->
+        <div class="admin-sidebar">
+            <div class="sidebar-header">
+                <h3>Admin Panel</h3>
+                <p>Manage your Sage system</p>
+            </div>
+            
+            <div class="sidebar-menu">
+                <a href="#" class="menu-item active" onclick="showSection('documents')" title="Document Management">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Documents</span>
+                    <span class="menu-badge" id="docs-count">0</span>
+                </a>
+                <a href="#" class="menu-item" onclick="showSection('users')" title="User Management">
+                    <i class="fas fa-users"></i>
+                    <span>Users</span>
+                    <span class="menu-badge" id="users-count">0</span>
+                </a>
+                <a href="#" class="menu-item" onclick="showSection('analytics')" title="System Analytics">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="menu-item" onclick="showSection('settings')" title="System Settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="system-status">
+                    <h4>System Status</h4>
+                    <div class="status-item">
+                        <span>API Server</span>
+                        <span class="status-indicator" id="api-indicator">
+                            <i class="fas fa-circle"></i>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span>Database</span>
+                        <span class="status-indicator" id="db-indicator">
+                            <i class="fas fa-circle"></i>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span>Vector Store</span>
+                        <span class="status-indicator" id="vector-indicator">
+                            <i class="fas fa-circle"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="admin-content">
+            <!-- Documents Section -->
+            <section id="documents-section" class="admin-section active">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h2>Document Management</h2>
+                        <p>Upload and manage knowledge base documents</p>
+                    </div>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary btn-small" onclick="loadDocuments()" title="Refresh Documents">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="showUploadModal()" title="Upload New Document">
+                            <i class="fas fa-upload"></i> Upload Document
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-file"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-documents">0</h3>
+                            <p>Total Documents</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="processed-documents">0</h3>
+                            <p>Processed</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="processing-documents">0</h3>
+                            <p>Processing</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-puzzle-piece"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-chunks">0</h3>
+                            <p>Total Chunks</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="documents-container">
+                    <div class="table-container">
+                        <table class="data-table" id="documents-table">
+                            <thead>
+                                <tr>
+                                    <th>Document</th>
+                                    <th>Type</th>
+                                    <th>Size</th>
+                                    <th>Status</th>
+                                    <th>Chunks</th>
+                                    <th>Uploaded</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="documents-tbody">
+                                <!-- Documents will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="users-section" class="admin-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h2>User Management</h2>
+                        <p>Manage system users and permissions</p>
+                    </div>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary btn-small" onclick="loadUsers()" title="Refresh Users">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="showCreateUserModal()" title="Create New User">
+                            <i class="fas fa-user-plus"></i> Add User
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-users">0</h3>
+                            <p>Total Users</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="active-users">0</h3>
+                            <p>Active Users</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="admin-users">0</h3>
+                            <p>Administrators</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-calendar-day"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="new-users-today">0</h3>
+                            <p>New Today</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="users-container">
+                    <div class="table-container">
+                        <table class="data-table" id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Full Name</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Joined</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <!-- Users will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Analytics Section -->
+            <section id="analytics-section" class="admin-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h2>System Analytics</h2>
+                        <p>Monitor system usage and performance</p>
+                    </div>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary btn-small" onclick="loadAnalytics()" title="Refresh Analytics">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="exportAnalytics()" title="Export Report">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+                </div>
+
+                <div class="analytics-grid">
+                    <div class="analytics-card">
+                        <h3>Usage Overview</h3>
+                        <div class="analytics-content">
+                            <div class="metric">
+                                <span class="metric-label">Total Chat Sessions</span>
+                                <span class="metric-value" id="total-chat-sessions">0</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Messages Processed</span>
+                                <span class="metric-value" id="total-messages">0</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Average Response Time</span>
+                                <span class="metric-value" id="avg-response-time">0ms</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <h3>Document Statistics</h3>
+                        <div class="analytics-content">
+                            <div class="metric">
+                                <span class="metric-label">Most Used Document</span>
+                                <span class="metric-value" id="most-used-doc">-</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Total File Size</span>
+                                <span class="metric-value" id="total-file-size">0 MB</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Processing Success Rate</span>
+                                <span class="metric-value" id="processing-success-rate">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <h3>User Activity</h3>
+                        <div class="analytics-content">
+                            <div class="metric">
+                                <span class="metric-label">Daily Active Users</span>
+                                <span class="metric-value" id="daily-active-users">0</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Peak Usage Hour</span>
+                                <span class="metric-value" id="peak-usage-hour">-</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">User Satisfaction</span>
+                                <span class="metric-value" id="user-satisfaction">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-card full-width">
+                        <h3>System Performance</h3>
+                        <div class="analytics-content">
+                            <div class="performance-grid">
+                                <div class="performance-item">
+                                    <span class="performance-label">CPU Usage</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 45%"></div>
+                                    </div>
+                                    <span class="performance-value">45%</span>
+                                </div>
+                                <div class="performance-item">
+                                    <span class="performance-label">Memory Usage</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 60%"></div>
+                                    </div>
+                                    <span class="performance-value">60%</span>
+                                </div>
+                                <div class="performance-item">
+                                    <span class="performance-label">Storage Usage</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 30%"></div>
+                                    </div>
+                                    <span class="performance-value">30%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings-section" class="admin-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h2>System Settings</h2>
+                        <p>Configure system parameters and preferences</p>
+                    </div>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary btn-small" onclick="loadSettings()" title="Refresh Settings">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-primary" onclick="saveSettings()" title="Save All Settings">
+                            <i class="fas fa-save"></i> Save Settings
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="setting-card">
+                        <h3><i class="fas fa-server"></i> System Health</h3>
+                        <div class="setting-content">
+                            <div class="status-grid">
+                                <div class="status-item">
+                                    <span>API Server</span>
+                                    <span class="status-badge" id="api-status">Unknown</span>
+                                </div>
+                                <div class="status-item">
+                                    <span>Database</span>
+                                    <span class="status-badge" id="database-status">Unknown</span>
+                                </div>
+                                <div class="status-item">
+                                    <span>FAISS Vector Store</span>
+                                    <span class="status-badge" id="faiss-status">Unknown</span>
+                                </div>
+                                <div class="status-item">
+                                    <span>WebSocket Service</span>
+                                    <span class="status-badge" id="websocket-status">Unknown</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-card">
+                        <h3><i class="fas fa-upload"></i> File Upload Settings</h3>
+                        <div class="setting-content">
+                            <div class="setting-item">
+                                <label for="max-file-size">Maximum File Size (MB)</label>
+                                <input type="number" id="max-file-size" value="10" min="1" max="100">
+                            </div>
+                            <div class="setting-item">
+                                <label for="allowed-types">Allowed File Types</label>
+                                <input type="text" id="allowed-types" value="pdf,docx,txt,xlsx" readonly>
+                            </div>
+                            <div class="setting-item">
+                                <label for="chunk-size">Text Chunk Size</label>
+                                <input type="number" id="chunk-size" value="500" min="100" max="2000">
+                            </div>
+                            <div class="setting-item">
+                                <label for="chunk-overlap">Chunk Overlap</label>
+                                <input type="number" id="chunk-overlap" value="50" min="0" max="200">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-card">
+                        <h3><i class="fas fa-brain"></i> AI Model Settings</h3>
+                        <div class="setting-content">
+                            <div class="setting-item">
+                                <label for="ai-model">AI Model</label>
+                                <select id="ai-model">
+                                    <option value="gpt-4o">GPT-4o</option>
+                                    <option value="gpt-4">GPT-4</option>
+                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label for="temperature">Temperature</label>
+                                <input type="range" id="temperature" min="0" max="2" step="0.1" value="0">
+                                <span class="range-value">0</span>
+                            </div>
+                            <div class="setting-item">
+                                <label for="max-tokens">Max Response Tokens</label>
+                                <input type="number" id="max-tokens" value="2048" min="100" max="4000">
+                            </div>
+                            <div class="setting-item">
+                                <label for="similar-docs">Similar Documents Count</label>
+                                <input type="number" id="similar-docs" value="6" min="1" max="20">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-card">
+                        <h3><i class="fas fa-shield-alt"></i> Security Settings</h3>
+                        <div class="setting-content">
+                            <div class="setting-item">
+                                <label for="session-timeout">Session Timeout (minutes)</label>
+                                <input type="number" id="session-timeout" value="30" min="5" max="480">
+                            </div>
+                            <div class="setting-item">
+                                <label>
+                                    <input type="checkbox" id="require-2fa" checked>
+                                    Require Two-Factor Authentication
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label>
+                                    <input type="checkbox" id="log-chat-sessions" checked>
+                                    Log Chat Sessions
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label>
+                                    <input type="checkbox" id="auto-backup" checked>
+                                    Automatic Backups
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-card">
+                        <h3><i class="fas fa-database"></i> Data Management</h3>
+                        <div class="setting-content">
+                            <div class="setting-actions">
+                                <button class="btn btn-secondary" onclick="exportData()">
+                                    <i class="fas fa-download"></i> Export Data
+                                </button>
+                                <button class="btn btn-warning" onclick="clearCache()">
+                                    <i class="fas fa-broom"></i> Clear Cache
+                                </button>
+                                <button class="btn btn-info" onclick="rebuildIndex()">
+                                    <i class="fas fa-hammer"></i> Rebuild Index
+                                </button>
+                                <button class="btn btn-danger" onclick="resetSystem()">
+                                    <i class="fas fa-exclamation-triangle"></i> Reset System
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-card">
+                        <h3><i class="fas fa-info-circle"></i> System Information</h3>
+                        <div class="setting-content">
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span>Sage Version</span>
+                                    <span>1.0.0</span>
+                                </div>
+                                <div class="info-item">
+                                    <span>API Version</span>
+                                    <span>v1</span>
+                                </div>
+                                <div class="info-item">
+                                    <span>Database Version</span>
+                                    <span>PostgreSQL 15</span>
+                                </div>
+                                <div class="info-item">
+                                    <span>Python Version</span>
+                                    <span>3.11+</span>
+                                </div>
+                                <div class="info-item">
+                                    <span>Last Backup</span>
+                                    <span id="last-backup">Never</span>
+                                </div>
+                                <div class="info-item">
+                                    <span>Uptime</span>
+                                    <span id="system-uptime">Unknown</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-upload"></i> Upload Documents</h3>
+                <span class="modal-close" onclick="closeUploadModal()" title="Close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="upload-form" enctype="multipart/form-data">
+                    <div class="upload-area" id="upload-area">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <h4>Drop files here or click to browse</h4>
+                        <p>Supported formats: PDF, DOCX, TXT, XLSX (Max 10MB each)</p>
+                        <input type="file" id="file-input" accept=".pdf,.docx,.txt,.xlsx" multiple hidden>
+                    </div>
+                    
+                    <div id="file-list" class="file-list">
+                        <!-- Selected files will appear here -->
+                    </div>
+                    
+                    <div class="upload-tips">
+                        <h4><i class="fas fa-lightbulb"></i> Tips for better results:</h4>
+                        <ul>
+                            <li>Use clear, well-formatted documents</li>
+                            <li>Ensure text is selectable (not scanned images)</li>
+                            <li>Break large documents into smaller sections</li>
+                            <li>Use descriptive filenames</li>
+                        </ul>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUploadModal()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button class="btn btn-primary" onclick="uploadFiles()" disabled id="upload-btn">
+                    <i class="fas fa-upload"></i> Upload
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h3>Processing...</h3>
+            <p id="loading-message">Please wait while we process your request</p>
+        </div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container" class="alert-container"></div>
+
+    <!-- Scripts -->
+    <script src="../static/js/main.js"></script>
+    <script src="../static/js/admin.js"></script>
+    
+    <script>
+        // Initialize admin panel
+        document.addEventListener('DOMContentLoaded', function() {
+            // Update temperature slider display
+            const tempSlider = document.getElementById('temperature');
+            const tempValue = document.querySelector('#temperature + .range-value');
+            
+            if (tempSlider && tempValue) {
+                tempSlider.addEventListener('input', function() {
+                    tempValue.textContent = this.value;
+                });
+            }
+            
+            // Set current user name if available
+            if (currentUser && currentUser.full_name) {
+                const adminNameEl = document.getElementById('admin-name');
+                if (adminNameEl) {
+                    adminNameEl.textContent = currentUser.full_name;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

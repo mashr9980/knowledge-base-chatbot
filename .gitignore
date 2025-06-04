@@ -1,0 +1,11 @@
+rag-vectordb/
+esap_env/
+app/__pycache__/
+app/api/__pycache__/
+app/core/__pycache__/
+app/models/__pycache__/
+app/schemas/__pycache__/
+app/services/__pycache__/
+alembic.ini
+__pycache__/
+.env
